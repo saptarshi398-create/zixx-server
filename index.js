@@ -44,6 +44,14 @@ if (process.env.NODE_ENV !== 'production') {
     'http://127.0.0.1:5173',
   ]));
 }
+// In production, also include known deployed frontends as a safe fallback
+if (process.env.NODE_ENV === 'production') {
+  allowedOrigins = Array.from(new Set([
+    ...allowedOrigins,
+    'https://zixx.vercel.app',
+    'https://zixx-admin.vercel.app',
+  ]));
+}
 const corsOptions = {
   origin: function (origin, cb) {
     if (!origin) return cb(null, true);
@@ -76,7 +84,9 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
     res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-refresh-attempt');
+    // Reflect requested headers on preflight to avoid mismatches
+    const reqHeaders = req.headers['access-control-request-headers'];
+    res.header('Access-Control-Allow-Headers', reqHeaders || 'Content-Type, Authorization, x-refresh-attempt');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   }
   if (req.method === 'OPTIONS') {
