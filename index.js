@@ -33,7 +33,17 @@ const app = express();
 const FRONTEND_URL = process.env.FRONTEND_URL ;
 const FRONTEND_DEV_URL = process.env.FRONTEND_DEV_URL ;
 const ADMIN_CLIENT_URL = process.env.ADMIN_CLIENT_URL ;
-const allowedOrigins = [FRONTEND_URL, FRONTEND_DEV_URL, ADMIN_CLIENT_URL].filter(Boolean);
+let allowedOrigins = [FRONTEND_URL, FRONTEND_DEV_URL, ADMIN_CLIENT_URL].filter(Boolean);
+// In non-production, automatically allow common local dev origins so login works via proxy
+if (process.env.NODE_ENV !== 'production') {
+  allowedOrigins = Array.from(new Set([
+    ...allowedOrigins,
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ]));
+}
 const corsOptions = {
   origin: function (origin, cb) {
     if (!origin) return cb(null, true);

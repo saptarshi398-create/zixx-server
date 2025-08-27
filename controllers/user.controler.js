@@ -77,14 +77,16 @@ exports.userLogin = async (req, res) => {
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
       maxAge: 7 * 60 * 60 * 1000, // 7 hours
     });
     // set refresh token as httpOnly cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -95,7 +97,7 @@ exports.userLogin = async (req, res) => {
 }
 
 // =====================
-// ✅ Get All Users (Admin Only)
+// Get All Users (Admin Only)
 // =====================
 exports.getAllUsers = async (req, res) => {
   try {
@@ -131,7 +133,7 @@ exports.getAllUsers = async (req, res) => {
 };
 
 // ==========================
-// ✅ Get Single User by id
+// Get Single User by id
 // ==========================
 exports.getUserById = async (req, res) => {
   try {
@@ -144,7 +146,7 @@ exports.getUserById = async (req, res) => {
 };
 
 // ==========================
-// ✅ Get Current User Info
+// Get Current User Info
 // ==========================
 exports.getCurrentUserInfo = async (req, res) => {
   try {
@@ -180,7 +182,7 @@ exports.getCurrentUserInfo = async (req, res) => {
 }
 
 // =====================
-// ✅ Validate Token
+// Validate Token
 // =====================
 exports.validateToken = (req, res) => {
   let token = req.headers.authorization;
@@ -195,7 +197,7 @@ exports.validateToken = (req, res) => {
 }
 
 // =====================
-// ✅ Refresh Access Token
+// Refresh Access Token
 // Accepts { refreshToken } in body and returns a new access token
 // =====================
 exports.refreshAccessToken = async (req, res) => {
@@ -226,7 +228,8 @@ exports.refreshAccessToken = async (req, res) => {
     res.cookie('refreshToken', newRefresh, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -285,7 +288,7 @@ exports.deleteUsersByAdmin = async (req, res) => {
 
 
 // ==========================
-// ✅ Update User Info & Profile Photo
+// Update User Info & Profile Photo
 // ==========================
 exports.updateUser = async (req, res) => {
     try {
@@ -338,7 +341,7 @@ exports.logoutUser = (req, res) => {
     const cookieOpts = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // secure only in production
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
       expires: new Date(0), // force expire
     };
@@ -351,7 +354,8 @@ exports.logoutUser = (req, res) => {
 
     // Set-Cookie headers as a fallback for some browsers
     const secureFlag = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-    const cookieBase = `Path=/; Expires=${new Date(0).toUTCString()}; HttpOnly; SameSite=Lax${secureFlag}`;
+    const sameSite = process.env.NODE_ENV === 'production' ? 'None' : 'Lax';
+    const cookieBase = `Path=/; Expires=${new Date(0).toUTCString()}; HttpOnly; SameSite=${sameSite}${secureFlag}`;
     res.setHeader('Set-Cookie', [
       `token=; ${cookieBase}`,
       `refreshToken=; ${cookieBase}`,
@@ -386,7 +390,7 @@ exports.logoutRedirect = (req, res) => {
     const cookieOpts = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
       expires: new Date(0),
     };
