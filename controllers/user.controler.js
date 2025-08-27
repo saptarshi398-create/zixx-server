@@ -402,7 +402,8 @@ exports.logoutRedirect = (req, res) => {
 
     // Fallback: explicit Set-Cookie headers
     const secureFlag = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-    const cookieBase = `Path=/; Expires=${new Date(0).toUTCString()}; HttpOnly; SameSite=Lax${secureFlag}`;
+    const sameSite = process.env.NODE_ENV === 'production' ? 'None' : 'Lax';
+    const cookieBase = `Path=/; Expires=${new Date(0).toUTCString()}; HttpOnly; SameSite=${sameSite}${secureFlag}`;
     res.setHeader('Set-Cookie', [
       `token=; ${cookieBase}`,
       `refreshToken=; ${cookieBase}`,
@@ -413,7 +414,7 @@ exports.logoutRedirect = (req, res) => {
     try { console.log('[logoutRedirect] incoming cookies:', req.headers.cookie); } catch (e) {}
 
     // Redirect back to provided returnTo or frontend auth
-    let frontend = process.env.Frontend_URL || `http://${req.hostname}:8080`;
+    let frontend = process.env.FRONTEND_URL || `http://${req.hostname}:8080`;
     const returnTo = req.query.returnTo;
     if (returnTo) {
       try { return res.redirect(returnTo); } catch (e) {}
