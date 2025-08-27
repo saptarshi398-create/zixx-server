@@ -38,7 +38,8 @@ UserRouter.patch("/user/me", authenticator,
 );
 
 UserRouter.get("/validatetoken", authenticator, validateToken);
-UserRouter.post("/refresh", authenticator, refreshAccessToken);
+// Allow refresh without access-token authenticator; it validates refresh token itself
+UserRouter.post("/refresh", refreshAccessToken);
 // Allow logout to be called without authentication so clients can force cookie removal.
 UserRouter.post('/logout', logoutUser);
 // also support GET /logout for top-level navigation logout which can clear httpOnly cookies via redirect

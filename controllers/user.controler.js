@@ -233,6 +233,15 @@ exports.refreshAccessToken = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    // also set fresh access token as httpOnly cookie so cookie-based flows work cross-site
+    res.cookie('token', newToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
+      maxAge: 7 * 60 * 60 * 1000, // 7 hours
+    });
+
     res.json({ token: newToken, ok: true });
   } catch (error) {
     res.status(500).json({ msg: 'Server error', error: error.message, ok: false });
