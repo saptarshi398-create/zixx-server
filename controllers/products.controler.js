@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const { ProductModel } = require("../models/products.model");
-const { ProductStat } = require("../models/ProductStat.model");
+const { ProductStat } = require("../models/productStat.model");
 
 // ✅ Get all products
 // exports.getAllProducts = async (req, res) => {
