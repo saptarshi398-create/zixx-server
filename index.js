@@ -42,6 +42,10 @@ if (process.env.NODE_ENV !== 'production') {
     'http://127.0.0.1:8080',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:4173',
+    'http://127.0.0.1:4173',
   ]));
 }
 // In production, also include known deployed frontends as a safe fallback
@@ -52,10 +56,38 @@ if (process.env.NODE_ENV === 'production') {
     'https://zixx-admin.vercel.app',
   ]));
 }
+
+// Allow ops to extend origins at deploy time via env without code changes
+const EXTRA_CORS = process.env.CORS_ALLOWED_ORIGINS; // comma-separated list of origins
+if (EXTRA_CORS) {
+  const extraList = EXTRA_CORS.split(',').map(s => s.trim()).filter(Boolean);
+  if (extraList.length) {
+    allowedOrigins = Array.from(new Set([...allowedOrigins, ...extraList]));
+  }
+}
+
+// Derive trusted hostnames from allowed origins, so we can allow both http/https and www/no-www
+const urlToHost = (u) => { try { return new URL(u).hostname.toLowerCase(); } catch { return null; } };
+let allowedHosts = Array.from(new Set(allowedOrigins.map(urlToHost).filter(Boolean)));
+if (process.env.NODE_ENV !== 'production') {
+  allowedHosts = Array.from(new Set([...allowedHosts, 'localhost', '127.0.0.1']));
+}
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // non-browser clients
+  try {
+    if (allowedOrigins.includes(origin)) return true; // exact match
+    const host = new URL(origin).hostname.toLowerCase();
+    const hostNoWww = host.startsWith('www.') ? host.slice(4) : host;
+    return allowedHosts.includes(host) || allowedHosts.includes(hostNoWww);
+  } catch {
+    return false;
+  }
+};
+
 const corsOptions = {
   origin: function (origin, cb) {
-    if (!origin) return cb(null, true);
-    if (allowedOrigins.includes(origin)) return cb(null, true);
+    if (isOriginAllowed(origin)) return cb(null, true);
     console.warn("Blocked CORS origin:", origin);
     return cb(new Error("Not allowed by CORS"));
   },
@@ -80,7 +112,7 @@ app.options('*', cors(corsOptions));
 // Explicit CORS headers safeguard (ensures credentials header is present)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
+  if (origin && isOriginAllowed(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
     res.header('Access-Control-Allow-Credentials', 'true');
@@ -148,6 +180,7 @@ app.listen(process.env.PORT, async () => {
     console.log("✅ Server running on PORT", process.env.PORT);
     console.log("✅ Connected to MongoDB");
     console.log("✅ Allowed Origins:", allowedOrigins);
+    console.log("✅ Allowed Hosts:", allowedHosts);
     // Auto-seed only when explicitly enabled: set AUTO_SEED=true
     try {
       const SEED_ENABLED = process.env.AUTO_SEED === 'true';
