@@ -42,7 +42,7 @@ exports.userRegister = async (req, res) => {
       // schema enum expects 'admin' or 'customer' — default to 'customer' when not provided
       role: role || "customer",
       address: address || {},
-      profile_pic: profile_pic || "N/A",
+      profile_pic: profile_pic || "https://imgs.search.brave.com/RVlCqw3p0uoiaetgT8E5nbaIalanB95GbXOOaURZMrA/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9jZG4t/aWNvbnMtcG5nLmZy/ZWVwaWsuY29tLzI1/Ni84MDA3LzgwMDc5/NTMucG5nP3NlbXQ9/YWlzX3doaXRlX2xh/YmVs",
       wishlist: wishlist || [],
       orders: orders || [],
       emailVerified: emailVerified || false,
