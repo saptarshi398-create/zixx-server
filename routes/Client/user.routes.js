@@ -79,19 +79,46 @@ UserRouter.get(
   '/auth/google/callback',
   (req, res, next) => {
     try {
+      // Log the original URL for debugging
+      console.log('Google OAuth callback hit with URL:', req.originalUrl);
+      
       // Store the returnTo URL from the query parameters in the session
       if (req.query.returnTo) {
-        req.session.returnTo = req.query.returnTo;
+        // Make sure the returnTo is a valid URL on our allowed domains
+        let returnTo = req.query.returnTo;
+        try {
+          const url = new URL(returnTo);
+          const allowedDomains = [
+            'zixx.vercel.app',
+            'zixx-admin.vercel.app',
+            'localhost:8080',
+            'localhost:3000',
+            '127.0.0.1:8080'
+          ];
+          
+          if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {
+            console.warn('Invalid returnTo domain:', url.hostname);
+            returnTo = process.env.FRONTEND_URL || 'https://zixx.vercel.app';
+          }
+        } catch (e) {
+          console.warn('Invalid returnTo URL:', returnTo, e);
+          returnTo = process.env.FRONTEND_URL || 'https://zixx.vercel.app';
+        }
+        
+        req.session.returnTo = returnTo;
       } else {
         const frontendUrl = process.env.NODE_ENV === 'production' 
-          ? process.env.FRONTEND_URL 
-          : process.env.FRONTEND_DEV_URL;
+          ? (process.env.FRONTEND_URL || 'https://zixx.vercel.app')
+          : (process.env.FRONTEND_DEV_URL || 'http://localhost:8080');
         req.session.returnTo = `${frontendUrl}/auth`;
       }
+      
+      console.log('Set returnTo:', req.session.returnTo);
       next();
     } catch (error) {
       console.error('Error in Google OAuth callback setup:', error);
-      next(error);
+      // Redirect to a safe URL on error
+      res.redirect(process.env.FRONTEND_URL || 'https://zixx.vercel.app/auth?error=oauth_failed');
     }
   },
   (req, res, next) => {

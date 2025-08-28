@@ -54,6 +54,8 @@ if (process.env.NODE_ENV === 'production') {
     ...allowedOrigins,
     'https://zixx.vercel.app',
     'https://zixx-admin.vercel.app',
+    'https://zixx-admin-hzavv7qnl-ajay-mondals-projects.vercel.app',
+    'https://zixx-admin-*.vercel.app', // Wildcard for preview deployments
   ]));
 }
 
@@ -76,7 +78,29 @@ if (process.env.NODE_ENV !== 'production') {
 const isOriginAllowed = (origin) => {
   if (!origin) return true; // non-browser clients
   try {
-    if (allowedOrigins.includes(origin)) return true; // exact match
+    // Check for exact match first
+    if (allowedOrigins.includes(origin)) return true;
+    
+    // Check for wildcard matches (e.g., '*.vercel.app')
+    const originHost = new URL(origin).hostname.toLowerCase();
+    for (const allowedOrigin of allowedOrigins) {
+      if (allowedOrigin.startsWith('https://')) {
+        try {
+          const allowedHost = new URL(allowedOrigin).hostname;
+          if (allowedHost.startsWith('*.')) {
+            const domain = allowedHost.substring(2);
+            if (originHost.endsWith(domain)) {
+              return true;
+            }
+          }
+        } catch (e) {
+          // Ignore invalid URLs in allowedOrigins
+          continue;
+        }
+      }
+    }
+    
+    // Check host and host without www
     const host = new URL(origin).hostname.toLowerCase();
     const hostNoWww = host.startsWith('www.') ? host.slice(4) : host;
     return allowedHosts.includes(host) || allowedHosts.includes(hostNoWww);
