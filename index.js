@@ -105,8 +105,10 @@ const corsOptions = {
 // Parse cookies before anything else
 app.use(cookieParser());
 
-// CORS: allow frontend + admin panel with credentials and handle preflight
+// Apply CORS with the configured options
 app.use(cors(corsOptions));
+
+// Handle preflight requests
 app.options('*', cors(corsOptions));
 
 // Explicit CORS headers safeguard (ensures credentials header is present)
@@ -148,13 +150,18 @@ app.get("/", (req, res) => {
   res.send("WELCOME TO THE ZIXX APP BACKEND");
 });
 
-// Serve frontend in production
+// Serve frontend in production (only if a build exists or explicitly enabled)
 if (process.env.NODE_ENV === "production") {
   const frontendPath = path.join(__dirname, "..", "frontend", "dist");
-  app.use(express.static(frontendPath));
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(frontendPath, "index.html"));
-  });
+  const shouldServe = process.env.SERVE_FRONTEND === 'true' || fs.existsSync(frontendPath);
+  if (shouldServe) {
+    app.use(express.static(frontendPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(frontendPath, "index.html"));
+    });
+  } else {
+    console.warn('[startup] Skipping serving frontend: dist not found and SERVE_FRONTEND not set');
+  }
 }
 
 // 404 handler for API
@@ -179,7 +186,7 @@ app.listen(process.env.PORT, async () => {
     await connection;
     console.log("✅ Server running on PORT", process.env.PORT);
     console.log("✅ Connected to MongoDB");
-    console.log("✅ Allowed Origins:", allowedOrigins);
+    // console.log("✅ Allowed Origins:", allowedOrigins);
     console.log("✅ Allowed Hosts:", allowedHosts);
     // Auto-seed only when explicitly enabled: set AUTO_SEED=true
     try {
