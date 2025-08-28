@@ -123,7 +123,11 @@ UserRouter.get(
   },
   (req, res, next) => {
     // Custom callback to handle authentication
-    passport.authenticate('google', { session: false }, (err, user, info) => {
+    passport.authenticate('google', { 
+      session: false,
+      failureRedirect: '/api/clients/auth/google/failed',
+      scope: ['profile', 'email']
+    }, (err, user, info) => {
       if (err) {
         console.error('Google OAuth error:', err);
         return next(err);
@@ -142,63 +146,152 @@ UserRouter.get(
     try {
       const profile = req.user || {};
       const email = (profile.emails && profile.emails[0] && profile.emails[0].value) || '';
-      const given = (profile.name && profile.name.givenName) || (profile.displayName || '');
-      const family = (profile.name && profile.name.familyName) || '';
+      const given = (profile.name && profile.name.givenName) || (profile.displayName || '').split(' ')[0] || '';
+      const family = (profile.name && profile.name.familyName) || (profile.displayName || '').split(' ').slice(1).join(' ') || '';
       const avatar = (profile.photos && profile.photos[0] && profile.photos[0].value) || '';
-
+      
       if (!email) {
-        const FRONTEND = (process.env.FRONTEND_URL || process.env.FRONTEND_DEV_URL || '').replace(/\/$/, '');
-        return res.redirect(`${FRONTEND || '/auth'}?error=missing_email`);
+        console.error('No email provided by Google OAuth');
+        return res.redirect(`${process.env.FRONTEND_URL || 'https://zixx.vercel.app'}/auth?error=no_email`);
       }
 
       // Find or create user
       let user = await UserModel.findOne({ email });
       if (!user) {
-        const randomPass = require('crypto').randomBytes(24).toString('hex');
+        // Generate a secure random password for the user
+        const randomPass = require('crypto').randomBytes(32).toString('hex');
+        
+        // Create a username from email if not available
+        const username = email.split('@')[0] + Math.floor(Math.random() * 1000);
         user = new UserModel({
-          first_name: given || 'Google',
-          middle_name: '',
-          last_name: family || '',
           email,
-          password: randomPass,
-          phone: 0,
-          dob: 'N/A',
-          gender: 'other',
-          address: {},
+          username,
+          password: randomPass, // Will be hashed by pre-save hook
+          first_name: given,
+          last_name: family,
           profile_pic: avatar,
-          role: 'customer',
           emailVerified: true,
           isActive: true,
+          authProvider: 'google',
+          authProviderId: profile.id,
+          // Set default role if needed
+          role: 'user',
+          // Add any other default fields required by your schema
+          phone: '',
+          gender: '',
+          dob: null,
+          address: {
+            personal_address: '',
+            shoping_address: '',
+            billing_address: '',
+            address_village: '',
+            landmark: '',
+            city: '',
+            state: '',
+            country: '',
+            zip: ''
+          }
         });
-        await user.save();
+        
+        try {
+          await user.save();
+          console.log('Created new user from Google OAuth:', user.email);
+        } catch (error) {
+          console.error('Error saving new user from Google OAuth:', error);
+          throw new Error('Failed to create user account');
+        }
       }
 
-      // Issue JWT tokens similar to password login
-      const token = jwt.sign({ userid: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7h' });
-      const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+      // Generate JWT token with user data
+      const token = jwt.sign(
+        { 
+          userId: user._id, 
+          role: user.role,
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.last_name
+        },
+        process.env.JWT_SECRET,
+        { 
+          expiresIn: '7d',
+          issuer: 'zixx-app',
+          audience: 'web-client'
+        }
+      );
 
+      // Set token in HTTP-only cookie for web clients
       const cookieOpts = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         path: '/',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        domain: process.env.NODE_ENV === 'production' ? '.zixx.vercel.app' : undefined
       };
 
-      res.cookie('token', token, { ...cookieOpts, maxAge: 7 * 60 * 60 * 1000 });
-      res.cookie('refreshToken', refreshToken, { ...cookieOpts, maxAge: 7 * 24 * 60 * 60 * 1000 });
+      res.cookie('token', token, cookieOpts);
 
-      // Determine where to send the user back
-      let frontend = process.env.FRONTEND_URL || process.env.FRONTEND_DEV_URL;
-      try {
-        if (!frontend && req.headers.origin) frontend = req.headers.origin;
-      } catch {}
-      const base = (frontend || '').replace(/\/$/, '') || `http://${req.hostname}:8080`;
-      const returnTo = (req.session && req.session.returnTo) || `${base}/auth`;
-      try { if (req.session) req.session.returnTo = null; } catch {}
-
-      // Include token in URL as a non-httpOnly fallback for mobile browsers blocking cookies
-      const redirectUrl = `${returnTo}${returnTo.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}&provider=google&ok=1`;
-      return res.redirect(redirectUrl);
+      // Determine the safe redirect URL
+      let redirectBase = process.env.FRONTEND_URL || process.env.FRONTEND_DEV_URL || '';
+      
+      // Try to get the returnTo from session if it's a trusted domain
+      let returnTo = '';
+      if (req.session && req.session.returnTo) {
+        try {
+          const url = new URL(req.session.returnTo);
+          const allowedDomains = [
+            'zixx.vercel.app',
+            'zixx-admin.vercel.app',
+            'localhost:3000',
+            'localhost:8080',
+            '127.0.0.1:8080'
+          ];
+          
+          if (allowedDomains.some(domain => url.hostname.endsWith(domain))) {
+            returnTo = req.session.returnTo;
+          }
+        } catch (e) {
+          console.warn('Invalid returnTo URL in session:', req.session.returnTo);
+        }
+      }
+      
+      // If no valid returnTo in session, use the default frontend URL
+      if (!returnTo) {
+        redirectBase = redirectBase.replace(/\/$/, '');
+        returnTo = `${redirectBase}/auth`;
+      }
+      
+      // Clear the returnTo from session
+      if (req.session) {
+        delete req.session.returnTo;
+      }
+      
+      // Build the redirect URL with token as query parameter
+      const url = new URL(returnTo);
+      url.searchParams.set('token', token);
+      url.searchParams.set('provider', 'google');
+      url.searchParams.set('ok', '1');
+      
+      // Preserve the 'next' parameter if it exists in the original URL
+      if (req.query.next) {
+        url.searchParams.set('next', req.query.next);
+      }
+      
+      // Log the redirect (without the token for security)
+      console.log('Redirecting to:', `${url.origin}${url.pathname}?token=[REDACTED]&${url.searchParams.toString().replace(/token=[^&]*&?/, '')}`);
+      
+      // Redirect with security headers
+      return res
+        .status(302)
+        .set({
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-Frame-Options': 'DENY',
+          'X-Content-Type-Options': 'nosniff',
+          'Referrer-Policy': 'strict-origin-when-cross-origin'
+        })
+        .redirect(url.toString());
     } catch (e) {
       console.error('[google-callback] error:', e);
       const FRONTEND = (process.env.FRONTEND_URL || process.env.FRONTEND_DEV_URL || '').replace(/\/$/, '');
