@@ -11,6 +11,7 @@ exports.userRegister = async (req, res) => {
   try {
     const {
       first_name,
+      middle_name,
       last_name,
       email,
       password,
@@ -33,6 +34,7 @@ exports.userRegister = async (req, res) => {
 
     const newUser = new UserModel({
       first_name,
+      middle_name: middle_name || "",
       last_name,
       email,
       password,
