@@ -12,32 +12,6 @@ const { ProductStat } = require("../models/productStat.model");
 //   }
 // }
 
-// ✅ Recent products grouped by category
-exports.getRecentByCategory = async (req, res) => {
-  try {
-    const { gender, limit = 6 } = req.query;
-    const filter = {};
-    if (gender) filter.gender = { $regex: new RegExp(`^${gender}$`, 'i') };
-
-    // Fetch recent products, then group in memory by category up to limit each
-    const items = await ProductModel.find(filter)
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const groupedMap = new Map();
-    for (const p of items) {
-      const cat = p.category || 'Uncategorized';
-      if (!groupedMap.has(cat)) groupedMap.set(cat, []);
-      const arr = groupedMap.get(cat);
-      if (arr.length < Number(limit)) arr.push(p);
-    }
-    const grouped = Array.from(groupedMap.entries()).map(([category, products]) => ({ category, products }));
-    return res.json({ ok: true, data: grouped });
-  } catch (error) {
-    return res.status(500).json({ ok: false, message: 'Error fetching recent by category', error: error.message });
-  }
-}
-
 exports.getProducts = async (req, res) => {
   try {
     const {
@@ -228,27 +202,12 @@ exports.addProduct = async (req, res) => {
     if (!req.body.category || !req.body.subcategory || !req.body.gender) {
       return res.status(400).send({ msg: "Category, subcategory, and gender are required" });
     }
-    // Normalize size/colors from either CSV string or array
-    const sizeArr = Array.isArray(req.body.size)
-      ? req.body.size
-      : String(req.body.size || "")
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-    const colorsSource = Array.isArray(req.body.colors)
-      ? req.body.colors
-      : Array.isArray(req.body.color)
-        ? req.body.color
-        : String(req.body.colors || req.body.color || "")
-            .split(",")
-            .map((c) => c.trim())
-            .filter(Boolean);
     // images/imagesDetailed presence will be validated after normalization below
-    if (!sizeArr || !Array.isArray(sizeArr) || sizeArr.length === 0) {
+    if (!req.body.size || !Array.isArray(req.body.size) || req.body.size.length === 0) {
       return res.status(400).send({ msg: "At least one size is required", ok: false, data: req.body.size });
     }
-    if (!colorsSource || !Array.isArray(colorsSource) || colorsSource.length === 0) {
-      return res.status(400).send({ msg: "At least one color is required", ok: false, data: req.body.colors || req.body.color });
+    if (!req.body.colors || !Array.isArray(req.body.colors) || req.body.colors.length === 0) {
+      return res.status(400).send({ msg: "At least one color is required", ok: false, data: req.body.colors });
     }
 
     // Normalize images (support array of strings or array of objects)
@@ -289,12 +248,8 @@ exports.addProduct = async (req, res) => {
       images: structured, // structured with metadata
       userId: user.userid,
     };
-    // Ensure proper schema fields
-    payload.size = sizeArr;
-    payload.color = colorsSource;
     delete payload.imagesDetailed;
     delete payload.images; // ensure we only persist normalized fields
-    delete payload.colors; // map to 'color'
 
     const newProduct = new ProductModel(payload);
     await newProduct.save();
@@ -397,28 +352,6 @@ exports.updateProduct = async (req, res) => {
       updateData.images = structuredU;
       delete updateData.imagesDetailed;
       delete updateData.images; // we set normalized images above
-    }
-    // Normalize size/colors if provided
-    if (typeof req.body.size !== 'undefined') {
-      const sizeU = Array.isArray(req.body.size)
-        ? req.body.size
-        : String(req.body.size || "")
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
-      updateData.size = sizeU;
-    }
-    if (typeof req.body.colors !== 'undefined' || typeof req.body.color !== 'undefined') {
-      const colorU = Array.isArray(req.body.colors)
-        ? req.body.colors
-        : Array.isArray(req.body.color)
-          ? req.body.color
-          : String(req.body.colors || req.body.color || "")
-              .split(",")
-              .map((c) => c.trim())
-              .filter(Boolean);
-      updateData.color = colorU;
-      delete updateData.colors;
     }
     const updated = await ProductModel.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!updated) {
