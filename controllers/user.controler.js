@@ -291,7 +291,11 @@ exports.updateUsersByAdmin = async (req, res) => {
     ) {
       const userDoc = await UserModel.findById(userId);
       if (!userDoc) return res.status(404).json({ msg: 'User not found', ok: false });
-      const currentAddress = userDoc.address || {};
+      // Normalize current address: it might be stored as a JSON string for legacy users
+      let currentAddress = userDoc.address || {};
+      if (typeof currentAddress === 'string') {
+        try { currentAddress = JSON.parse(currentAddress) || {}; } catch { currentAddress = {}; }
+      }
       const isMeaningful = (v) => {
         if (v === undefined) return false;
         const s = String(v).trim();
@@ -407,7 +411,11 @@ exports.updateUser = async (req, res) => {
         ) {
             // Fetch current user to merge address fields
             const userDoc = await UserModel.findById(userId);
-            const currentAddress = userDoc?.address || {};
+            // Normalize current address in case it's stored as a JSON string
+            let currentAddress = userDoc?.address || {};
+            if (typeof currentAddress === 'string') {
+                try { currentAddress = JSON.parse(currentAddress) || {}; } catch { currentAddress = {}; }
+            }
             const isMeaningful = (v) => {
                 if (v === undefined) return false;
                 const s = String(v).trim();
