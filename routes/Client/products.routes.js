@@ -11,7 +11,8 @@ const {
     getProductsByGenderKids,
     getProductsBySubcategory,
     updateProduct,
-    deleteProduct
+    deleteProduct,
+    getRecentByCategory,
 } = require("../../controllers/products.controler");
 const { ReviewRouter } = require("./reviews.routes");
 const { authenticator } = require("../../middlewares/authenticator.middleware");
@@ -42,6 +43,9 @@ ProductRouter.get("/products/kids", getProductsByGenderKids);
 
 // ✅ Get products by subcategory
 ProductRouter.get("/products/men/:subcategory", getProductsBySubcategory);
+
+// ✅ Get recent products grouped by category (optional ?gender=men&women&kid, &limit=6)
+ProductRouter.get("/products/recent-by-category", getRecentByCategory);
 
 
 module.exports = { ProductRouter };
