@@ -161,13 +161,14 @@ UserRouter.get(
     try {
       const profile = req.user || {};
       const email = (profile.emails && profile.emails[0] && profile.emails[0].value) || '';
-      const given = (profile.name && profile.name.givenName) || (profile.displayName || '').split(' ')[0] || '';
-      const family = (profile.name && profile.name.familyName) || (profile.displayName || '').split(' ').slice(1).join(' ') || '';
+      const given = (profile.name && profile.name.givenName) || (profile.displayName || '').split(' ')[0] || (email.split('@')[0] || '');
+      const family = (profile.name && profile.name.familyName) || (profile.displayName || '').split(' ').slice(1).join(' ') || 'User';
       const avatar = (profile.photos && profile.photos[0] && profile.photos[0].value) || '';
       
       if (!email) {
         console.error('No email provided by Google OAuth');
-        return res.redirect(`${process.env.FRONTEND_URL }/auth?error=no_email`);
+        const FRONTEND = getFrontendBase();
+        return res.redirect(`${FRONTEND}/auth?error=no_email`);
       }
 
       // Find or create user
@@ -189,12 +190,12 @@ UserRouter.get(
           isActive: true,
           authProvider: 'google',
           authProviderId: profile.id,
-          // Set default role if needed
-          role: 'user',
-          // Add any other default fields required by your schema
-          phone: '',
-          gender: '',
-          dob: null,
+          // Role must match enum ["admin","customer"]
+          role: 'customer',
+          // Satisfy required fields in schema with safe defaults
+          phone: 0,
+          gender: 'unspecified',
+          dob: '1970-01-01',
           address: {
             personal_address: '',
             shoping_address: '',
