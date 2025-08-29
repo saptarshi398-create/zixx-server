@@ -5,28 +5,24 @@ exports.getGeography = async (req, res) => {
   try {
     const users = await UserModel.find();
     const mappedLocations = users.reduce((acc, user) => {
-      const address = JSON.parse(user.address);
-      const country = address.country;
+      // address is stored as an object in schema; but be defensive if stored as JSON string
+      let address = user && user.address ? user.address : {};
+      if (typeof address === 'string') {
+        try { address = JSON.parse(address); } catch { address = {}; }
+      }
+      const country = (address && address.country) ? address.country : '';
+      if (!country) return acc;
       const countryISO3 = countries.getAlpha3Code(country, 'en');
-      if (countryISO3 === undefined) {
-        console.error(`Error: Unable to get ISO 3 code for country ${country}`);
+      if (!countryISO3) {
         return acc;
       }
-      if (!acc[countryISO3]) {
-        acc[countryISO3] = 0;
-      }
-      acc[countryISO3]++;
+      if (!acc[countryISO3]) acc[countryISO3] = 0;
+      acc[countryISO3] += 1;
       return acc;
     }, {});
-    console.log("Mapped Locations:", mappedLocations);
-    const formattedLocations = Object.entries(mappedLocations).map(
-      ([country, count]) => {
-        return { id: country, value: count };
-      }
-    );
-    
+    const formattedLocations = Object.entries(mappedLocations).map(([country, count]) => ({ id: country, value: count }));
     res.status(200).json(formattedLocations);
   } catch (error) {
-    res.status(404).json({ message: error.message });
+    res.status(500).json({ message: error.message || 'Failed to compute geography' });
   }
 };
