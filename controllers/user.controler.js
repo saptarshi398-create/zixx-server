@@ -261,14 +261,74 @@ exports.updateUsersByAdmin = async (req, res) => {
       return res.status(403).json({ msg: "Access denied", ok: false });
     }
     const userId = req.params.id;
-    const updates = {
-      ...req.body,
-      updatedAt: new Date(),
-    };
+    if (!userId) return res.status(400).json({ msg: 'User id is required', ok: false });
+
+    const updates = { ...req.body };
+
+    // Validate/cast phone if provided
+    if (Object.prototype.hasOwnProperty.call(updates, 'phone')) {
+      const raw = String(updates.phone).trim();
+      if (raw === '') {
+        delete updates.phone;
+      } else if (/^\d+$/.test(raw)) {
+        updates.phone = Number(raw);
+      } else {
+        return res.status(400).json({ msg: 'Invalid phone number', ok: false });
+      }
+    }
+
+    // Merge flat address fields into nested address when provided
+    if (
+      updates.personal_address !== undefined ||
+      updates.shoping_address !== undefined ||
+      updates.billing_address !== undefined ||
+      updates.address_village !== undefined ||
+      updates.landmark !== undefined ||
+      updates.city !== undefined ||
+      updates.state !== undefined ||
+      updates.country !== undefined ||
+      updates.zip !== undefined
+    ) {
+      const userDoc = await UserModel.findById(userId);
+      if (!userDoc) return res.status(404).json({ msg: 'User not found', ok: false });
+      const currentAddress = userDoc.address || {};
+      const isMeaningful = (v) => {
+        if (v === undefined) return false;
+        const s = String(v).trim();
+        if (s === '') return false;
+        if (s.toLowerCase() === 'n/a') return false;
+        return true;
+      };
+      updates.address = {
+        ...currentAddress,
+        ...(isMeaningful(updates.personal_address) ? { personal_address: updates.personal_address } : {}),
+        ...(isMeaningful(updates.shoping_address) ? { shoping_address: updates.shoping_address } : {}),
+        ...(isMeaningful(updates.billing_address) ? { billing_address: updates.billing_address } : {}),
+        ...(isMeaningful(updates.address_village) ? { address_village: updates.address_village } : {}),
+        ...(isMeaningful(updates.landmark) ? { landmark: updates.landmark } : {}),
+        ...(isMeaningful(updates.city) ? { city: updates.city } : {}),
+        ...(isMeaningful(updates.state) ? { state: updates.state } : {}),
+        ...(isMeaningful(updates.country) ? { country: updates.country } : {}),
+        ...(isMeaningful(updates.zip) ? { zip: updates.zip } : {}),
+      };
+      // remove flat fields after nesting
+      delete updates.personal_address;
+      delete updates.shoping_address;
+      delete updates.billing_address;
+      delete updates.address_village;
+      delete updates.landmark;
+      delete updates.city;
+      delete updates.state;
+      delete updates.country;
+      delete updates.zip;
+    }
+
+    updates.updatedAt = new Date();
+
     const user = await UserModel.findByIdAndUpdate(userId, updates, {
-      new: true, 
-      runValidators: true, 
-    });
+      new: true,
+      runValidators: true,
+    }).select('-password');
 
     if (!user) {
       return res.status(404).json({ msg: "User not found", ok: false });
@@ -309,44 +369,93 @@ exports.deleteUsersByAdmin = async (req, res) => {
 exports.updateUser = async (req, res) => {
     try {
         const userId = req.userid;
-        const updates = req.body;
-        // If phone is present, convert to number
-        if (updates.phone) updates.phone = Number(updates.phone);
-        // If address fields are present, nest them (including city, state, country, zip)
-        if (
-        updates.address_village !== undefined ||
-        updates.landmark !== undefined ||
-        updates.city !== undefined ||
-        updates.state !== undefined ||
-        updates.country !== undefined ||
-        updates.zip !== undefined
-        ) {
-        // Fetch current user to merge address fields
-        const userDoc = await UserModel.findById(userId);
-        const currentAddress = userDoc?.address || {};
-        updates.address = {
-            ...currentAddress,
-            ...(updates.address_village !== undefined ? { address_village: updates.address_village } : {}),
-            ...(updates.landmark !== undefined ? { landmark: updates.landmark } : {}),
-            ...(updates.city !== undefined ? { city: updates.city } : {}),
-            ...(updates.state !== undefined ? { state: updates.state } : {}),
-            ...(updates.country !== undefined ? { country: updates.country } : {}),
-            ...(updates.zip !== undefined ? { zip: updates.zip } : {}),
-        };
-        delete updates.personal_address;
-        delete updates.shoping_address;
-        delete updates.billing_address;
-        delete updates.address_village;
-        delete updates.landmark;
-        delete updates.city;
-        delete updates.state;
-        delete updates.country;
-        delete updates.zip;
+        if (!userId) {
+            return res.status(401).json({ msg: 'Unauthorized: missing user id', ok: false });
         }
-        const updatedUser = await UserModel.findByIdAndUpdate(userId, updates, { new: true }).select("-password");
-        res.json({ msg: "User updated successfully", user: updatedUser, ok: true });
+
+        const updates = { ...req.body };
+
+        // Debug incoming payload when enabled
+        if (isDebug) {
+            try { console.log('[updateUser] incoming updates:', { ...updates, profile_pic: updates.profile_pic ? '[set]' : undefined }); } catch {}
+        }
+
+        // If phone is present, validate and convert to number
+        if (Object.prototype.hasOwnProperty.call(updates, 'phone')) {
+            const raw = String(updates.phone).trim();
+            if (raw === '') {
+                // empty -> do not overwrite
+                delete updates.phone;
+            } else if (/^\d+$/.test(raw)) {
+                updates.phone = Number(raw);
+            } else {
+                return res.status(400).json({ msg: 'Invalid phone number', ok: false });
+            }
+        }
+
+        // If address fields are present, nest them (including personal/billing/shopping, city, state, country, zip)
+        if (
+            updates.personal_address !== undefined ||
+            updates.shoping_address !== undefined ||
+            updates.billing_address !== undefined ||
+            updates.address_village !== undefined ||
+            updates.landmark !== undefined ||
+            updates.city !== undefined ||
+            updates.state !== undefined ||
+            updates.country !== undefined ||
+            updates.zip !== undefined
+        ) {
+            // Fetch current user to merge address fields
+            const userDoc = await UserModel.findById(userId);
+            const currentAddress = userDoc?.address || {};
+            const isMeaningful = (v) => {
+                if (v === undefined) return false;
+                const s = String(v).trim();
+                if (s === '') return false;
+                if (s.toLowerCase() === 'n/a') return false;
+                return true;
+            };
+            updates.address = {
+                ...currentAddress,
+                ...(isMeaningful(updates.personal_address) ? { personal_address: updates.personal_address } : {}),
+                ...(isMeaningful(updates.shoping_address) ? { shoping_address: updates.shoping_address } : {}),
+                ...(isMeaningful(updates.billing_address) ? { billing_address: updates.billing_address } : {}),
+                ...(isMeaningful(updates.address_village) ? { address_village: updates.address_village } : {}),
+                ...(isMeaningful(updates.landmark) ? { landmark: updates.landmark } : {}),
+                ...(isMeaningful(updates.city) ? { city: updates.city } : {}),
+                ...(isMeaningful(updates.state) ? { state: updates.state } : {}),
+                ...(isMeaningful(updates.country) ? { country: updates.country } : {}),
+                ...(isMeaningful(updates.zip) ? { zip: updates.zip } : {}),
+            };
+            // remove flat fields after nesting
+            delete updates.personal_address;
+            delete updates.shoping_address;
+            delete updates.billing_address;
+            delete updates.address_village;
+            delete updates.landmark;
+            delete updates.city;
+            delete updates.state;
+            delete updates.country;
+            delete updates.zip;
+        }
+
+        // maintain updatedAt timestamp
+        updates.updatedAt = new Date();
+
+        const updatedUser = await UserModel.findByIdAndUpdate(
+            userId,
+            updates,
+            { new: true, runValidators: true }
+        ).select("-password");
+
+        if (!updatedUser) {
+            return res.status(404).json({ msg: 'User not found', ok: false });
+        }
+
+        return res.json({ msg: "User updated successfully", user: updatedUser, ok: true });
     } catch (error) {
-        res.status(500).json({ msg: "Failed to update user", error: error.message, ok: false });
+        console.error('[updateUser] error:', error);
+        return res.status(500).json({ msg: "Failed to update user", error: error.message, ok: false });
     }
 }
 
