@@ -155,6 +155,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Trust the first proxy (Render/Ingress), required for secure cookies and correct protocol detection
+app.set('trust proxy', 1);
+
 // Use JSON parser for all routes except Razorpay webhook, which needs raw body
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/clients/payments/razorpay/webhook') return next();
