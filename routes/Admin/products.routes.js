@@ -7,6 +7,7 @@ const {
     deleteProduct
 } = require("../../controllers/products.controler");
 const { adminMiddleware } = require("../../middlewares/admin.middleware");
+const { upload, cloudinaryUploadMiddleware } = require("../../middlewares/cloudinaryUpload");
 const ProductAdminRouter = express.Router();
 
 // ✅ Get products by uploader user ID (admin only)
@@ -20,5 +21,20 @@ ProductAdminRouter.patch("/products/update/:id", authenticator, adminMiddleware,
 
 // ✅ Delete product
 ProductAdminRouter.delete("/products/delete/:id", authenticator, adminMiddleware, deleteProduct);
+
+// ✅ Image upload for products: form-data field name should be 'image'
+ProductAdminRouter.post(
+  "/products/upload",
+  authenticator,
+  adminMiddleware,
+  upload.single("image"),
+  cloudinaryUploadMiddleware,
+  (req, res) => {
+    if (!req.body.profile_pic) {
+      return res.status(400).json({ ok: false, message: "No image uploaded" });
+    }
+    return res.json({ ok: true, url: req.body.profile_pic });
+  }
+);
 
 module.exports = { ProductAdminRouter };
