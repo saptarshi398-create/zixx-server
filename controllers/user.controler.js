@@ -3,6 +3,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const dotenv = require("dotenv");
 dotenv.config();
+const isDebug = process.env.DEBUG_LOGS === 'true';
 
 // =====================
 // ✅ Register New User
@@ -55,6 +56,7 @@ exports.userRegister = async (req, res) => {
     res.status(201).json({ msg: "User registered successfully", ok: true });
   } catch (error) {
     console.error(error);
+
     res.status(500).json({ msg: "Server error", error: error.message, ok: false });
   }
 }
@@ -170,15 +172,17 @@ exports.getCurrentUserInfo = async (req, res) => {
       }
       userId = decoded.userid || decoded.id;
     }
-    // console.log('[user.controler] getCurrentUserInfo - resolved userId:', userId);
-    // console.log('[user.controler] getCurrentUserInfo - incoming Authorization header:', req.headers.authorization);
+    if (isDebug) console.log('[user.controler] getCurrentUserInfo - resolved userId:', userId);
+    if (isDebug) console.log('[user.controler] getCurrentUserInfo - incoming Authorization header:', req.headers.authorization);
 
     const user = await UserModel.findById(userId).select("-password");
-    // console.log('[user.controler] getCurrentUserInfo - db user found:', !!user);
+    if (isDebug) console.log('[user.controler] getCurrentUserInfo - db user found:', !!user);
+
     if (!user) return res.status(404).json({ msg: "User not found", ok: false });
     res.json({ user, ok: true });
   } catch (err) {
-    // console.error('[user.controler] getCurrentUserInfo error:', err);
+    console.error('[user.controler] getCurrentUserInfo error:', err);
+
     res.status(401).json({ msg: "Invalid token", ok: false });
   }
 }
@@ -288,7 +292,8 @@ exports.deleteUsersByAdmin = async (req, res) => {
     if (!user) {
       return res.status(404).json({ msg: "User not found", ok: false });
     }
-    console.log("User deleted:", user);
+    if (isDebug) console.log("User deleted:", user);
+
     res.json({ msg: "User deleted", ok: true });
   } catch (error) {
     res
@@ -372,7 +377,6 @@ exports.logoutUser = (req, res) => {
       `refreshToken=; ${cookieBase}`,
     ]);
 
-    // Destroy server session if using express-session
     try {
       if (req.session) {
         req.session.destroy(() => {});
@@ -383,13 +387,14 @@ exports.logoutUser = (req, res) => {
 
     // Log incoming cookies for debugging
     try {
-      console.log('[logoutUser] Incoming cookies:', req.headers.cookie || 'none');
+      if (isDebug) console.log('[logoutUser] Incoming cookies:', req.headers.cookie || 'none');
     } catch (err) {}
 
     // Send success response
     return res.json({ msg: 'Logged out', ok: true });
   } catch (err) {
     console.error('[logoutUser] Error:', err);
+
     return res.status(500).json({ msg: 'Logout failed', ok: false, error: err.message });
   }
 };
@@ -422,7 +427,7 @@ exports.logoutRedirect = (req, res) => {
 
     try { if (req.session) req.session.destroy(() => {}); } catch (e) {}
     // optional diagnostic log
-    try { console.log('[logoutRedirect] incoming cookies:', req.headers.cookie); } catch (e) {}
+    try { if (isDebug) console.log('[logoutRedirect] incoming cookies:', req.headers.cookie); } catch (e) {}
 
     // Redirect back to provided returnTo or frontend auth
     let frontend = process.env.FRONTEND_URL || `http://${req.hostname}:8080`;

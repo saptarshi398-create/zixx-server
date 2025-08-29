@@ -13,6 +13,8 @@ const fs = require('fs');
     dotenv.config({ path: fallback });
   }
 })();
+// Toggle verbose logs
+const isDebug = process.env.DEBUG_LOGS === 'true';
 cloudinary.config({
   cloud_name: process.env.CLD_CLOUD_NAME,
   api_key: process.env.CLD_API_KEY,
@@ -218,7 +220,7 @@ app.listen(process.env.PORT, async () => {
       if (SEED_ENABLED) {
         await autoSeed();
       } else {
-        console.log('[autoSeed] Skipped (set AUTO_SEED=true to enable)');
+        if (isDebug) console.log('[autoSeed] Skipped (set AUTO_SEED=true to enable)');
       }
     } catch (e) {
       console.warn('[autoSeed] error during startup:', e && e.message ? e.message : e);

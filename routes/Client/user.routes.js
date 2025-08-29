@@ -21,6 +21,7 @@ const { UserModel } = require("../../models/users.model");
 const jwt = require("jsonwebtoken");
 
 const UserRouter = express.Router();
+const isDebug = process.env.DEBUG_LOGS === 'true';
 
 UserRouter.use(passport.initialize());
 UserRouter.use(passport.session());
@@ -80,7 +81,7 @@ UserRouter.get(
   (req, res, next) => {
     try {
       // Log the original URL for debugging
-      console.log('Google OAuth callback hit with URL:', req.originalUrl);
+      if (isDebug) console.log('Google OAuth callback hit with URL:', req.originalUrl);
       
       // Store the returnTo URL from the query parameters in the session
       if (req.query.returnTo) {
@@ -97,28 +98,31 @@ UserRouter.get(
           ];
           
           if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {
-            console.warn('Invalid returnTo domain:', url.hostname);
-            returnTo = process.env.FRONTEND_URL || 'https://zixx.vercel.app';
+            if (isDebug) console.warn('Invalid returnTo domain:', url.hostname);
+            returnTo = process.env.FRONTEND_URL;
           }
         } catch (e) {
-          console.warn('Invalid returnTo URL:', returnTo, e);
-          returnTo = process.env.FRONTEND_URL || 'https://zixx.vercel.app';
+          if (isDebug) console.warn('Invalid returnTo URL:', returnTo, e);
+          returnTo = process.env.FRONTEND_URL;
         }
         
         req.session.returnTo = returnTo;
       } else {
         const frontendUrl = process.env.NODE_ENV === 'production' 
-          ? (process.env.FRONTEND_URL || 'https://zixx.vercel.app')
-          : (process.env.FRONTEND_DEV_URL || 'http://localhost:8080');
+          ? (process.env.FRONTEND_URL)
+          : (process.env.FRONTEND_DEV_URL);
         req.session.returnTo = `${frontendUrl}/auth`;
       }
       
-      console.log('Set returnTo:', req.session.returnTo);
+      if (isDebug) console.log('Set returnTo:', req.session.returnTo);
       next();
     } catch (error) {
       console.error('Error in Google OAuth callback setup:', error);
-      // Redirect to a safe URL on error
-      res.redirect(process.env.FRONTEND_URL || 'https://zixx.vercel.app/auth?error=oauth_failed');
+      // Redirect to a safe URL on error based on environment
+      const fallbackUrl = process.env.NODE_ENV === 'production' 
+        ? (process.env.FRONTEND_URL)
+        : (process.env.FRONTEND_DEV_URL);
+      res.redirect(fallbackUrl);
     }
   },
   (req, res, next) => {
@@ -133,10 +137,10 @@ UserRouter.get(
         return next(err);
       }
       if (!user) {
-        console.log('Google OAuth failed - no user returned');
+        if (isDebug) console.log('Google OAuth failed - no user returned');
         return res.redirect(`/api/clients/auth/google/failed?error=no_user`);
       }
-      
+      if (isDebug) console.log('Google OAuth success - user returned:', user);
       // Attach user to request for the next middleware
       req.user = user;
       next();
@@ -152,7 +156,7 @@ UserRouter.get(
       
       if (!email) {
         console.error('No email provided by Google OAuth');
-        return res.redirect(`${process.env.FRONTEND_URL || 'https://zixx.vercel.app'}/auth?error=no_email`);
+        return res.redirect(`${process.env.FRONTEND_URL }/auth?error=no_email`);
       }
 
       // Find or create user
@@ -195,7 +199,7 @@ UserRouter.get(
         
         try {
           await user.save();
-          console.log('Created new user from Google OAuth:', user.email);
+          if (isDebug) console.log('Created new user from Google OAuth:', user.email);
         } catch (error) {
           console.error('Error saving new user from Google OAuth:', error);
           throw new Error('Failed to create user account');
@@ -205,7 +209,8 @@ UserRouter.get(
       // Generate JWT token with user data
       const token = jwt.sign(
         { 
-          userId: user._id, 
+          // Use `userid` consistently across the codebase so middleware can read it
+          userid: user._id, 
           role: user.role,
           email: user.email,
           first_name: user.first_name,
@@ -231,8 +236,10 @@ UserRouter.get(
 
       res.cookie('token', token, cookieOpts);
 
-      // Determine the safe redirect URL
-      let redirectBase = process.env.FRONTEND_URL || process.env.FRONTEND_DEV_URL || '';
+      // Determine the safe redirect URL based on environment
+      let redirectBase = process.env.NODE_ENV === 'production' 
+        ? (process.env.FRONTEND_URL )
+        : (process.env.FRONTEND_DEV_URL);
       
       // Try to get the returnTo from session if it's a trusted domain
       let returnTo = '';
@@ -251,7 +258,7 @@ UserRouter.get(
             returnTo = req.session.returnTo;
           }
         } catch (e) {
-          console.warn('Invalid returnTo URL in session:', req.session.returnTo);
+          if (isDebug) console.warn('Invalid returnTo URL in session:', req.session.returnTo);
         }
       }
       
@@ -278,7 +285,7 @@ UserRouter.get(
       }
       
       // Log the redirect (without the token for security)
-      console.log('Redirecting to:', `${url.origin}${url.pathname}?token=[REDACTED]&${url.searchParams.toString().replace(/token=[^&]*&?/, '')}`);
+      if (isDebug) console.log('Redirecting to:', `${url.origin}${url.pathname}?token=[REDACTED]&${url.searchParams.toString().replace(/token=[^&]*&?/, '')}`);
       
       // Redirect with security headers
       return res
@@ -294,8 +301,10 @@ UserRouter.get(
         .redirect(url.toString());
     } catch (e) {
       console.error('[google-callback] error:', e);
-      const FRONTEND = (process.env.FRONTEND_URL || process.env.FRONTEND_DEV_URL || '').replace(/\/$/, '');
-      return res.redirect(`${FRONTEND || '/auth'}?error=google_oauth_failed`);
+      const FRONTEND = process.env.NODE_ENV === 'production' 
+        ? (process.env.FRONTEND_URL )
+        : (process.env.FRONTEND_DEV_URL );
+      return res.redirect(`${FRONTEND.replace(/\/$/, '')}/auth?error=google_oauth_failed`);
     }
   }
 );
@@ -303,9 +312,10 @@ UserRouter.get(
 // Google OAuth failure -> send user back to frontend /auth with error
 UserRouter.get('/auth/google/failed', (req, res) => {
   try {
-    const FRONTEND = (process.env.FRONTEND_URL || process.env.FRONTEND_DEV_URL || '').replace(/\/$/, '');
-    const dest = FRONTEND ? `${FRONTEND}/auth?error=google_oauth_failed` : '/auth?error=google_oauth_failed';
-    return res.redirect(dest);
+    const FRONTEND = process.env.NODE_ENV === 'production' 
+      ? (process.env.FRONTEND_URL )
+      : (process.env.FRONTEND_DEV_URL );
+    const dest = `${FRONTEND.replace(/\/$/, '')}/auth?error=google_oauth_failed`;    return res.redirect(dest);
   } catch (e) {
     return res.status(400).json({ ok: false, msg: 'Google OAuth failed' });
   }
