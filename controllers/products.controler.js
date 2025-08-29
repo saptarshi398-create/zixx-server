@@ -196,27 +196,61 @@ exports.addProduct = async (req, res) => {
     if (!user || user.role !== "admin") {
       return res.status(403).json({ ok: false, message: "Access denied" });
     }
-    if (!req.body.title || !req.body.description || !req.body.price || !req.body.images) {
+    if (!req.body.title || !req.body.description || !req.body.price) {
       return res.status(400).send({ msg: "All fields are required" });
     }
     if (!req.body.category || !req.body.subcategory || !req.body.gender) {
       return res.status(400).send({ msg: "Category, subcategory, and gender are required" });
     }
-    if (!Array.isArray(req.body.images) || req.body.images.length === 0) {
-      return res.status(400).send({ msg: "At least one image is required" });
-    }
+    // images/imagesDetailed presence will be validated after normalization below
     if (!req.body.size || !Array.isArray(req.body.size) || req.body.size.length === 0) {
       return res.status(400).send({ msg: "At least one size is required", ok: false, data: req.body.size });
     }
     if (!req.body.colors || !Array.isArray(req.body.colors) || req.body.colors.length === 0) {
       return res.status(400).send({ msg: "At least one color is required", ok: false, data: req.body.colors });
     }
+
+    // Normalize images (support array of strings or array of objects)
+    const inboundImagesDetailed = Array.isArray(req.body.imagesDetailed) ? req.body.imagesDetailed : null;
+    const inboundImages = Array.isArray(req.body.images) ? req.body.images : null;
+    let structured = [];
+    if (inboundImagesDetailed && inboundImagesDetailed.length) {
+      structured = inboundImagesDetailed
+        .filter((it) => it && typeof it.url === 'string' && it.url.trim())
+        .map((it, idx) => ({
+          url: String(it.url).trim(),
+          caption: String(it.caption || ""),
+          alt: String(it.alt || ""),
+          order: Number.isFinite(it.order) ? it.order : idx,
+        }))
+        .sort((a, b) => a.order - b.order)
+        .map((it, idx) => ({ ...it, order: idx }));
+    } else if (inboundImages && inboundImages.length) {
+      // Could be array of strings or objects
+      structured = inboundImages
+        .map((it, idx) => {
+          if (typeof it === 'string') return { url: it.trim(), caption: "", alt: "", order: idx };
+          if (it && typeof it.url === 'string') return { url: it.url.trim(), caption: String(it.caption || ""), alt: String(it.alt || ""), order: Number.isFinite(it.order) ? it.order : idx };
+          return null;
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.order - b.order)
+        .map((it, idx) => ({ ...it, order: idx }));
+    }
+    if (!structured.length) {
+      return res.status(400).send({ msg: "At least one image is required" });
+    }
+    const legacyUrls = structured.map((i) => i.url);
+
     const payload = {
       ...req.body,
-      image: req.body.images, // store as 'image' in DB
-      userId: user.userid
+      image: legacyUrls, // legacy flat URLs
+      images: structured, // structured with metadata
+      userId: user.userid,
     };
-    delete payload.images;
+    delete payload.imagesDetailed;
+    delete payload.images; // ensure we only persist normalized fields
+
     const newProduct = new ProductModel(payload);
     await newProduct.save();
     res.send({ msg: "Product Added Successfully", ok: true, data: newProduct });
@@ -225,7 +259,7 @@ exports.addProduct = async (req, res) => {
   }
 }
 
-// ✅ Get products by gender men
+// Get products by gender men
 exports.getProductsByGenderMen = async (req, res) => {
   
   try {
@@ -236,7 +270,7 @@ exports.getProductsByGenderMen = async (req, res) => {
   }
 }
 
-// ✅ Get products by gender women
+// Get products by gender women
 exports.getProductsByGenderWomen = async (req, res) => {
   try {
     const products = await ProductModel.find({ gender: { $regex: /^women$/i } });
@@ -246,7 +280,7 @@ exports.getProductsByGenderWomen = async (req, res) => {
   }
 }
 
-// ✅ Get products by gender kids
+// Get products by gender kids
 exports.getProductsByGenderKids = async (req, res) => {
   try {
     const products = await ProductModel.find({ gender: { $regex: /^kid$/i } });
@@ -256,7 +290,7 @@ exports.getProductsByGenderKids = async (req, res) => {
   }
 }
 
-// ✅ Get products by subcategory
+// Get products by subcategory
 exports.getProductsBySubcategory = async (req, res) => {
   if (!req.params.subcategory) {
     return res.status(400).send({ msg: "Subcategory is required" });
@@ -286,11 +320,38 @@ exports.updateProduct = async (req, res) => {
   }
 
   try {
-    // If images is sent, update image field for consistency
+    // Normalize images on update if provided
     let updateData = { ...req.body };
-    if (Array.isArray(req.body.images)) {
-      updateData.image = req.body.images;
-      delete updateData.images;
+    const inboundImagesDetailedU = Array.isArray(req.body.imagesDetailed) ? req.body.imagesDetailed : null;
+    const inboundImagesU = Array.isArray(req.body.images) ? req.body.images : null;
+    if (inboundImagesDetailedU || inboundImagesU) {
+      let structuredU = [];
+      if (inboundImagesDetailedU && inboundImagesDetailedU.length) {
+        structuredU = inboundImagesDetailedU
+          .filter((it) => it && typeof it.url === 'string' && it.url.trim())
+          .map((it, idx) => ({
+            url: String(it.url).trim(),
+            caption: String(it.caption || ""),
+            alt: String(it.alt || ""),
+            order: Number.isFinite(it.order) ? it.order : idx,
+          }))
+          .sort((a, b) => a.order - b.order)
+          .map((it, idx) => ({ ...it, order: idx }));
+      } else if (inboundImagesU && inboundImagesU.length) {
+        structuredU = inboundImagesU
+          .map((it, idx) => {
+            if (typeof it === 'string') return { url: it.trim(), caption: "", alt: "", order: idx };
+            if (it && typeof it.url === 'string') return { url: it.url.trim(), caption: String(it.caption || ""), alt: String(it.alt || ""), order: Number.isFinite(it.order) ? it.order : idx };
+            return null;
+          })
+          .filter(Boolean)
+          .sort((a, b) => a.order - b.order)
+          .map((it, idx) => ({ ...it, order: idx }));
+      }
+      updateData.image = structuredU.map((i) => i.url);
+      updateData.images = structuredU;
+      delete updateData.imagesDetailed;
+      delete updateData.images; // we set normalized images above
     }
     const updated = await ProductModel.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!updated) {
