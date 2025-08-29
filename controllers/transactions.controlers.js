@@ -1,4 +1,5 @@
 const { Transaction } = require("../models/transaction.model");
+const { OrderModel } = require("../models/order.model");
 
 exports.Transactions = async (req, res) => {
   try {
@@ -12,6 +13,7 @@ exports.Transactions = async (req, res) => {
 
     // Safely parse sort if provided
     let sortFormatted = {};
+
     if (sort) {
       try {
         const sortParsed = JSON.parse(sort);
@@ -49,5 +51,40 @@ exports.Transactions = async (req, res) => {
   } catch (error) {
     console.error('[Transactions] error:', error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+// Admin-only: backfill transactions from orders that don't yet have a transaction
+exports.adminBackfillTransactions = async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ ok: false, msg: 'Access denied' });
+    }
+
+    // fetch orders excluding soft-deleted
+    const orders = await OrderModel.find({ isDeleted: { $ne: true } }).sort({ createdAt: -1 });
+    let created = 0;
+    let skipped = 0;
+
+    for (const order of orders) {
+      try {
+        const exists = await Transaction.findOne({ orderId: order._id });
+        if (exists) { skipped++; continue; }
+        await Transaction.create({
+          userId: order.userId,
+          orderId: order._id,
+          cost: String(order.totalAmount || 0),
+          products: Array.isArray(order.products) ? order.products : [],
+        });
+        created++;
+      } catch (e) {
+        // continue with next order
+      }
+    }
+
+    return res.json({ ok: true, created, skipped, totalOrders: orders.length });
+  } catch (error) {
+    console.error('[adminBackfillTransactions] error:', error);
+    return res.status(500).json({ ok: false, msg: 'Backfill failed', error: error.message });
   }
 };

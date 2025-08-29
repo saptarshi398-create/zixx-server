@@ -1,6 +1,7 @@
 const { CartModel } = require("../models/cart.model");
 const { OrderModel } = require("../models/order.model");
 const { UserModel } = require("../models/users.model");
+const { Transaction } = require("../models/transaction.model");
 const { sendOrderReceipt } = require("../utils/mailer");
 const axios = require('axios');
 
@@ -307,6 +308,17 @@ exports.buyCartProducts = async (req, res) => {
     });
 
     await order.save();
+    // Record admin-facing transaction
+    try {
+      await Transaction.create({
+        userId: req.userid,
+        orderId: order._id,
+        cost: String(totalAmount),
+        products: cartItems.map((item) => item.productId),
+      });
+    } catch (e) {
+      console.error('Failed to create Transaction from order:', e?.message || e);
+    }
     // Send receipt email if paid
     if (order.paymentStatus === 'paid') {
       try {
@@ -373,6 +385,17 @@ exports.buySelectedCartProducts = async (req, res) => {
     });
 
     await order.save();
+    // Record admin-facing transaction
+    try {
+      await Transaction.create({
+        userId: req.userid,
+        orderId: order._id,
+        cost: String(totalAmount),
+        products: cartItems.map((item) => item.productId),
+      });
+    } catch (e) {
+      console.error('Failed to create Transaction from consolidated order:', e?.message || e);
+    }
     // Send receipt email if paid
     if (order.paymentStatus === 'paid') {
       try {
