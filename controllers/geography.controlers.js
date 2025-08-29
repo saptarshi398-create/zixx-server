@@ -11,8 +11,11 @@ exports.getGeography = async (req, res) => {
         try { address = JSON.parse(address); } catch { address = {}; }
       }
       const country = (address && address.country) ? address.country : '';
+      const city = (address && address.city) ? address.city : '';
+      const state = (address && address.state) ? address.state : '';
+      const zip = (address && address.zip) ? address.zip : '';
       if (!country) return acc;
-      const countryISO3 = countries.getAlpha3Code(country, 'en');
+      const countryISO3 = countries.getAlpha3Code(country, 'en', city, state, zip);
       if (!countryISO3) {
         return acc;
       }
