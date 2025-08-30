@@ -3,11 +3,17 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 
 // Determine the callback URL based on environment
 const getCallbackURL = () => {
+  let baseUrl;
   if (process.env.NODE_ENV === 'production') {
-    return `${process.env.SERVER_URL}/clients/auth/google/callback`;
+    baseUrl = process.env.SERVER_URL || 'https://zixx-server.onrender.com/api';
   } else {
-    return `${process.env.SERVER_DEV_URL}/clients/auth/google/callback`;
+    baseUrl = process.env.SERVER_DEV_URL || 'http://localhost:8282/api';
   }
+  // Ensure no double slashes in the URL
+  const cleanBase = baseUrl.replace(/\/+$/, '');
+  const callbackUrl = `${cleanBase}/clients/auth/google/callback`;
+  console.log('Google OAuth Callback URL:', callbackUrl);
+  return callbackUrl;
 };
 
 passport.use(
