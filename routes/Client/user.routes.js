@@ -97,33 +97,26 @@ UserRouter.get(
       // Log the original URL for debugging
       if (isDebug) console.log('Google OAuth callback hit with URL:', req.originalUrl);
       
-      // Store the returnTo URL from the query parameters in the session
+      // Always redirect to production frontend after Google auth
+      const productionFrontend = 'https://zixx.vercel.app';
+      req.session.returnTo = `${productionFrontend}/auth`;
+      
+      // If there's a returnTo in query, append it as a parameter
       if (req.query.returnTo) {
-        // Make sure the returnTo is a valid URL on our allowed domains
-        let returnTo = req.query.returnTo;
         try {
+          const returnTo = req.query.returnTo;
           const url = new URL(returnTo);
           const allowedDomains = [
             'zixx.vercel.app',
-            'zixx-admin.vercel.app',
-            'localhost:8080',
-            'localhost:3000',
-            '127.0.0.1:8080'
+            'zixx-admin.vercel.app'
           ];
           
-          if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {
-            if (isDebug) console.warn('Invalid returnTo domain:', url.hostname);
-            returnTo = process.env.FRONTEND_URL;
+          if (allowedDomains.some(domain => url.hostname.endsWith(domain))) {
+            req.session.returnTo = `${productionFrontend}/auth?next=${encodeURIComponent(returnTo)}`;
           }
         } catch (e) {
-          if (isDebug) console.warn('Invalid returnTo URL:', returnTo, e);
-          returnTo = process.env.FRONTEND_URL;
+          if (isDebug) console.warn('Invalid returnTo URL:', req.query.returnTo, e);
         }
-        
-        req.session.returnTo = returnTo;
-      } else {
-        const frontendUrl = getFrontendBase();
-        req.session.returnTo = `${frontendUrl}/auth`;
       }
       
       if (isDebug) console.log('Set returnTo:', req.session.returnTo);
