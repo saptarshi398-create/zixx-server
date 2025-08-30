@@ -210,6 +210,19 @@ exports.addProduct = async (req, res) => {
       return res.status(400).send({ msg: "At least one color is required", ok: false, data: req.body.colors });
     }
 
+    // Normalize features (optional): accept string (CSV/newline) or array
+    let featuresArr = undefined;
+    if (typeof req.body.features === 'string') {
+      featuresArr = req.body.features
+        .split(/\r?\n|,/)
+        .map((s) => String(s).trim())
+        .filter(Boolean);
+    } else if (Array.isArray(req.body.features)) {
+      featuresArr = req.body.features
+        .map((s) => (typeof s === 'string' ? s : String(s?.text || '')).trim())
+        .filter(Boolean);
+    }
+
     // Normalize images (support array of strings or array of objects)
     const inboundImagesDetailed = Array.isArray(req.body.imagesDetailed) ? req.body.imagesDetailed : null;
     const inboundImages = Array.isArray(req.body.images) ? req.body.images : null;
@@ -244,6 +257,7 @@ exports.addProduct = async (req, res) => {
 
     const payload = {
       ...req.body,
+      ...(featuresArr ? { features: featuresArr } : {}),
       image: legacyUrls, // legacy flat URLs
       images: structured, // structured with metadata
       userId: user.userid,
@@ -322,6 +336,19 @@ exports.updateProduct = async (req, res) => {
   try {
     // Normalize images on update if provided
     let updateData = { ...req.body };
+    // Normalize features if provided
+    if (Object.prototype.hasOwnProperty.call(updateData, 'features')) {
+      if (typeof updateData.features === 'string') {
+        updateData.features = updateData.features
+          .split(/\r?\n|,/)
+          .map((s) => String(s).trim())
+          .filter(Boolean);
+      } else if (Array.isArray(updateData.features)) {
+        updateData.features = updateData.features
+          .map((s) => (typeof s === 'string' ? s : String(s?.text || '')).trim())
+          .filter(Boolean);
+      }
+    }
     const inboundImagesDetailedU = Array.isArray(req.body.imagesDetailed) ? req.body.imagesDetailed : null;
     const inboundImagesU = Array.isArray(req.body.images) ? req.body.images : null;
     if (inboundImagesDetailedU || inboundImagesU) {

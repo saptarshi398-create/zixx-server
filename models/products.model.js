@@ -11,6 +11,8 @@ const productSchema = mongoose.Schema({
   discount: { type: Number, default: 0 },
   rating: { type: Number, default: 0 },
   theme: { type: String, required: true },
+  // New: list of key product features
+  features: { type: [String], default: [] },
   size: { type: [String], default: [] },
   color: { type: [String], default: [] },
   // Legacy flat URL list for compatibility with existing consumers
@@ -37,3 +39,4 @@ const productSchema = mongoose.Schema({
 
 const ProductModel = mongoose.model("product", productSchema);
 module.exports = {ProductModel};
+
