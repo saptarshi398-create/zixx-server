@@ -4,7 +4,7 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 // Determine the callback URL based on environment
 const getCallbackURL = () => {
   if (process.env.NODE_ENV === 'production') {
-    return `${process.env.Server_URL}/clients/auth/google/callback`;
+    return `${process.env.SERVER_URL}/clients/auth/google/callback`;
   } else {
     return `${process.env.SERVER_DEV_URL}/clients/auth/google/callback`;
   }
