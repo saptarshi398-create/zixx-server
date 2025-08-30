@@ -1,16 +1,18 @@
 const cloudinary = require('cloudinary').v2;
 const path = require('path');
 const fs = require('fs');
-// Load env from centralized env directory: ../env/.env[.NODE_ENV]
+// Load env from backend local env files: backend/.env[.NODE_ENV]
 (() => {
-  const baseDir = path.join(__dirname, '..', 'env');
+  const baseDir = __dirname; // backend directory
+  const dotenv = require('dotenv');
   const specific = process.env.NODE_ENV ? path.join(baseDir, `.env.${process.env.NODE_ENV}`) : null;
   const fallback = path.join(baseDir, '.env');
-  const dotenv = require('dotenv');
   if (specific && fs.existsSync(specific)) {
     dotenv.config({ path: specific });
-  } else {
+  } else if (fs.existsSync(fallback)) {
     dotenv.config({ path: fallback });
+  } else {
+    // No .env found; proceed with process env
   }
 })();
 // Toggle verbose logs

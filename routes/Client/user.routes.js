@@ -29,12 +29,11 @@ const getFrontendBase = () => {
     const base = (
       (process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : process.env.FRONTEND_DEV_URL) ||
       process.env.FRONTEND_URL ||
-      process.env.FRONTEND_DEV_URL ||
-      'https://zixx.vercel.app'
+      process.env.FRONTEND_DEV_URL 
     );
     return String(base).replace(/\/$/, '');
   } catch {
-    return 'https://zixx.vercel.app';
+    return process.env.FRONTEND_DEV_URL;
   }
 };
 

@@ -470,29 +470,19 @@ exports.updateUser = async (req, res) => {
 // controllers/auth.controller.js (or wherever your logout controller resides)
 exports.logoutUser = (req, res) => {
   try {
-    // Cookie options to ensure cookies are properly expired
+    // Cookie options (no expires/maxAge for clearCookie per Express 5 deprecation)
     const cookieOpts = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // secure only in production
+      secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
-      expires: new Date(0), // force expire
     };
 
-    // Clear cookies using Express methods
-    res.cookie('token', '', cookieOpts);
-    res.cookie('refreshToken', '', cookieOpts);
+    // Clear cookies using Express helpers
     res.clearCookie('token', cookieOpts);
     res.clearCookie('refreshToken', cookieOpts);
 
-    // Set-Cookie headers as a fallback for some browsers
-    const secureFlag = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-    const sameSite = process.env.NODE_ENV === 'production' ? 'None' : 'Lax';
-    const cookieBase = `Path=/; Expires=${new Date(0).toUTCString()}; HttpOnly; SameSite=${sameSite}${secureFlag}`;
-    res.setHeader('Set-Cookie', [
-      `token=; ${cookieBase}`,
-      `refreshToken=; ${cookieBase}`,
-    ]);
+    // Fallback headers removed for cleaner implementation; clearCookie above is sufficient
 
     try {
       if (req.session) {
@@ -525,22 +515,12 @@ exports.logoutRedirect = (req, res) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
-      expires: new Date(0),
     };
     // Express helpers
-    res.cookie('token', '', cookieOpts);
-    res.cookie('refreshToken', '', cookieOpts);
     res.clearCookie('token', cookieOpts);
     res.clearCookie('refreshToken', cookieOpts);
 
-    // Fallback: explicit Set-Cookie headers
-    const secureFlag = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-    const sameSite = process.env.NODE_ENV === 'production' ? 'None' : 'Lax';
-    const cookieBase = `Path=/; Expires=${new Date(0).toUTCString()}; HttpOnly; SameSite=${sameSite}${secureFlag}`;
-    res.setHeader('Set-Cookie', [
-      `token=; ${cookieBase}`,
-      `refreshToken=; ${cookieBase}`,
-    ]);
+    // Fallback headers removed; rely on clearCookie only
 
     try { if (req.session) req.session.destroy(() => {}); } catch (e) {}
     // optional diagnostic log

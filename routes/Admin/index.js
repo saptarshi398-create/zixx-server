@@ -6,6 +6,7 @@ const { SalesRouter } = require("./sales.routes");
 const { TransactionRouter } = require("./transactions.routes");
 const { OrdersRouter } = require("./orders.routes");
 const { BannersAdminRouter } = require("./banners.routes");
+const { TestimonialsAdminRouter } = require("./testimonials.routes");
 
 module.exports = {
   adminRouter,
@@ -15,5 +16,6 @@ module.exports = {
   GeographyRouter,
   ProductAdminRouter,
   OrdersRouter,
-  BannersAdminRouter
+  BannersAdminRouter,
+  TestimonialsAdminRouter
 };

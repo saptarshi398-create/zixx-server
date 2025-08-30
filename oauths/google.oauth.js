@@ -4,9 +4,9 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 // Determine the callback URL based on environment
 const getCallbackURL = () => {
   if (process.env.NODE_ENV === 'production') {
-    return 'https://zixx-server.onrender.com/api/clients/auth/google/callback';
+    return `${process.env.Server_URL}/clients/auth/google/callback`;
   } else {
-    return 'http://localhost:8282/api/clients/auth/google/callback';
+    return `${process.env.SERVER_DEV_URL}/clients/auth/google/callback`;
   }
 };
 
