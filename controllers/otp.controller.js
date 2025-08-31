@@ -157,21 +157,66 @@ exports.verifyPhoneOtp = async (req, res) => {
 // Requires authenticator middleware to populate req.user
 exports.resendEmailVerificationForUser = async (req, res) => {
   try {
+    console.log('Resend verification request received. User:', req.user);
+    
+    // Get user from request (set by authenticator middleware)
     const user = req.user;
-    if (!user || !user.email) {
-      return res.status(401).json({ ok: false, msg: 'Unauthorized' });
+    if (!user) {
+      console.error('No user found in request');
+      return res.status(401).json({ ok: false, msg: 'Unauthorized: No user session' });
     }
-    // Optionally block if already verified
+
+    // Get user email from token or fetch from DB
+    let email = user.email;
+    let userId = user.userid || user._id;
+    
+    // If email is not in the token, try to get it from the database
+    if (!email && userId) {
+      try {
+        const found = await UserModel.findById(userId).lean();
+        if (!found) {
+          return res.status(404).json({ ok: false, msg: 'User not found' });
+        }
+        email = found.email;
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+        return res.status(500).json({ ok: false, msg: 'Error fetching user data' });
+      }
+    }
+
+    if (!email) {
+      return res.status(400).json({ ok: false, msg: 'No email associated with this account' });
+    }
+
+    // Check if email is already verified
     try {
-      const found = await UserModel.findById(user.userid || user._id).lean();
+      const found = await UserModel.findOne({ email }).lean();
       if (found && found.emailVerified) {
         return res.status(400).json({ ok: false, msg: 'Email already verified' });
       }
-    } catch {}
+    } catch (dbError) {
+      console.error('Error checking email verification status:', dbError);
+      // Continue anyway - better to send a duplicate email than to fail
+    }
 
-    const normalized = String(user.email).toLowerCase().trim();
+    console.log(`Sending verification email to ${email}`);
+    const normalized = email.toLowerCase().trim();
     const out = await sendOtp(normalized, 'email');
-    return res.status(out.status || (out.ok ? 200 : 400)).json(out);
+    
+    if (!out.ok) {
+      console.error('Failed to send OTP:', out.msg);
+      return res.status(400).json({
+        ok: false,
+        msg: out.msg || 'Failed to send verification email'
+      });
+    }
+    
+    console.log('Verification email sent successfully');
+    return res.json({
+      ok: true,
+      msg: 'Verification email sent successfully',
+      requestId: out.requestId
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, msg: 'Server error', error: e.message });
   }
