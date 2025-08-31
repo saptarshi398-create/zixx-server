@@ -90,12 +90,61 @@ async function sendOtp(target, channel) {
   return { ok: true, data: { requestId, cooldownSec: RESEND_COOLDOWN_SEC } };
 }
 
-async function verifyOtp(requestId, code, channel) {
-  const rec = await OTPModel.findOne({ requestId, channel });
-  if (!rec) return { ok: false, status: 400, msg: 'Invalid request.' };
-  if (rec.used) return { ok: false, status: 400, msg: 'OTP already used.' };
-  if (new Date() > new Date(rec.expiresAt)) return { ok: false, status: 400, msg: 'OTP expired.' };
-  if (rec.attempts >= MAX_ATTEMPTS) return { ok: false, status: 429, msg: 'Too many attempts.' };
+async function verifyOtp(requestId, code, channel, email = null) {
+  // Try to find the OTP record by requestId first
+  let rec = await OTPModel.findOne({ requestId, channel });
+  
+  // If no record found by requestId but we have email, try to find the latest unused OTP for this email
+  if (!rec && email) {
+    rec = await OTPModel.findOne({ 
+      target: email.toLowerCase().trim(),
+      channel,
+      used: false,
+      expiresAt: { $gt: new Date() }
+    }).sort({ createdAt: -1 });
+  }
+  
+  if (!rec) return { ok: false, status: 400, msg: 'Invalid or expired verification request. Please request a new OTP.' };
+  
+  // If OTP is already used, check if it was used recently (within 5 minutes)
+  if (rec.used) {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    if (new Date(rec.updatedAt) > fiveMinutesAgo) {
+      // If OTP was used recently, it might be a duplicate request, so we can still proceed
+      // But we'll check if the code matches first
+      const match = await bcrypt.compare(code, rec.codeHash);
+      if (match) {
+        // If the code matches, we can consider this a success (idempotent operation)
+        const user = await UserModel.findOne({ email: rec.target }).select('-password -refreshToken').lean();
+        return { 
+          ok: true, 
+          data: { 
+            requestId: rec.requestId,
+            email: rec.target,
+            user: user ? { ...user, emailVerified: true } : null,
+            wasAlreadyUsed: true
+          } 
+        };
+      }
+    }
+    return { ok: false, status: 400, msg: 'This verification code has already been used. Please request a new one.' };
+  }
+  
+  if (new Date() > new Date(rec.expiresAt)) {
+    return { 
+      ok: false, 
+      status: 400, 
+      msg: 'Verification code has expired. Please request a new one.' 
+    };
+  }
+  
+  if (rec.attempts >= MAX_ATTEMPTS) {
+    return { 
+      ok: false, 
+      status: 429, 
+      msg: 'Too many incorrect attempts. Please request a new verification code.' 
+    };
+  }
 
   const match = await bcrypt.compare(code, rec.codeHash);
   if (!match) {
@@ -148,29 +197,36 @@ exports.verifyEmailOtp = async (req, res) => {
     const { requestId, code, email } = req.body || {};
     
     if (!code) {
-      return res.status(400).json({ ok: false, msg: 'Verification code is required' });
+      return res.status(400).json({ 
+        ok: false, 
+        msg: 'Verification code is required' 
+      });
     }
     
-    // If requestId is not provided but email is, find the latest OTP for this email
-    let otpDoc;
-    if (email && !requestId) {
-      otpDoc = await OTPModel.findOne({ 
-        target: email.toLowerCase().trim(), 
-        channel: 'email' 
-      }).sort({ createdAt: -1 });
-      
-      if (!otpDoc) {
-        return res.status(400).json({ ok: false, msg: 'No verification request found for this email' });
-      }
-    } else if (!requestId) {
-      return res.status(400).json({ ok: false, msg: 'Either requestId or email is required' });
+    if (!requestId && !email) {
+      return res.status(400).json({ 
+        ok: false, 
+        msg: 'Either requestId or email is required' 
+      });
     }
     
-    const out = await verifyOtp(requestId || otpDoc.requestId, String(code).trim(), 'email');
+    // Call verifyOtp with both requestId and email
+    const out = await verifyOtp(
+      requestId || null,
+      String(code).trim(),
+      'email',
+      email || null
+    );
+    
     return res.status(out.status || (out.ok ? 200 : 400)).json(out);
+    
   } catch (e) {
     console.error('Error in verifyEmailOtp:', e);
-    return res.status(500).json({ ok: false, msg: 'Server error', error: e.message });
+    return res.status(500).json({ 
+      ok: false, 
+      msg: 'An error occurred while verifying your code. Please try again.',
+      error: process.env.NODE_ENV === 'development' ? e.message : undefined
+    });
   }
 };
 
