@@ -152,3 +152,27 @@ exports.verifyPhoneOtp = async (req, res) => {
     return res.status(500).json({ ok: false, msg: 'Server error', error: e.message });
   }
 };
+
+// Resend email verification OTP for the currently authenticated user
+// Requires authenticator middleware to populate req.user
+exports.resendEmailVerificationForUser = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !user.email) {
+      return res.status(401).json({ ok: false, msg: 'Unauthorized' });
+    }
+    // Optionally block if already verified
+    try {
+      const found = await UserModel.findById(user.userid || user._id).lean();
+      if (found && found.emailVerified) {
+        return res.status(400).json({ ok: false, msg: 'Email already verified' });
+      }
+    } catch {}
+
+    const normalized = String(user.email).toLowerCase().trim();
+    const out = await sendOtp(normalized, 'email');
+    return res.status(out.status || (out.ok ? 200 : 400)).json(out);
+  } catch (e) {
+    return res.status(500).json({ ok: false, msg: 'Server error', error: e.message });
+  }
+};

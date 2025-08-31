@@ -16,7 +16,7 @@ const {
   updateUser,
   changePassword
 } = require("../../controllers/user.controler");
-const { sendEmailOtp, verifyEmailOtp, sendPhoneOtp, verifyPhoneOtp } = require("../../controllers/otp.controller");
+const { sendEmailOtp, verifyEmailOtp, sendPhoneOtp, verifyPhoneOtp, resendEmailVerificationForUser } = require("../../controllers/otp.controller");
 const { authenticator } = require("../../middlewares/authenticator.middleware");
 const { cloudinaryUploadMiddleware, upload } = require("../../middlewares/cloudinaryUpload");
 const { UserModel } = require("../../models/users.model");
@@ -51,6 +51,9 @@ UserRouter.post('/otp/email/send', sendEmailOtp);
 UserRouter.post('/otp/email/verify', verifyEmailOtp);
 UserRouter.post('/otp/phone/send', sendPhoneOtp);
 UserRouter.post('/otp/phone/verify', verifyPhoneOtp);
+
+// Resend email verification for the authenticated user
+UserRouter.post('/user/resend-verification', authenticator, resendEmailVerificationForUser);
 
 UserRouter.get("/user/me", authenticator, getCurrentUserInfo);
 
