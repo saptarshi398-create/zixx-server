@@ -201,7 +201,25 @@ exports.resendEmailVerificationForUser = async (req, res) => {
 
     console.log(`Sending verification email to ${email}`);
     const normalized = email.toLowerCase().trim();
-    const out = await sendOtp(normalized, 'email');
+    
+    // Generate a verification link with OTP
+    const verificationLink = `${process.env.FRONTEND_URL}/verify-email?email=${encodeURIComponent(normalized)}`;
+    
+    // Send the email with the verification link
+    const out = await sendOtp(normalized, 'email', {
+      subject: 'Verify Your Email Address',
+      text: `Please click the following link to verify your email: ${verificationLink}\n\nOr enter this OTP: ${out?.otp || 'your verification code'} in the verification page.`,
+      html: `
+        <div>
+          <p>Please click the button below to verify your email address:</p>
+          <a href="${verificationLink}" style="display: inline-block; padding: 10px 20px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 4px;">
+            Verify Email
+          </a>
+          <p>Or copy and paste this OTP in the verification page: <strong>${out?.otp || 'your verification code'}</strong></p>
+          <p>This link will expire in 1 hour.</p>
+        </div>
+      `
+    });
     
     if (!out.ok) {
       console.error('Failed to send OTP:', out.msg);
