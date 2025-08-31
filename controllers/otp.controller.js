@@ -121,11 +121,31 @@ exports.sendEmailOtp = async (req, res) => {
 
 exports.verifyEmailOtp = async (req, res) => {
   try {
-    const { requestId, code } = req.body || {};
-    if (!requestId || !code) return res.status(400).json({ ok: false, msg: 'requestId and code required' });
-    const out = await verifyOtp(requestId, String(code).trim(), 'email');
+    const { requestId, code, email } = req.body || {};
+    
+    if (!code) {
+      return res.status(400).json({ ok: false, msg: 'Verification code is required' });
+    }
+    
+    // If requestId is not provided but email is, find the latest OTP for this email
+    let otpDoc;
+    if (email && !requestId) {
+      otpDoc = await OTPModel.findOne({ 
+        target: email.toLowerCase().trim(), 
+        channel: 'email' 
+      }).sort({ createdAt: -1 });
+      
+      if (!otpDoc) {
+        return res.status(400).json({ ok: false, msg: 'No verification request found for this email' });
+      }
+    } else if (!requestId) {
+      return res.status(400).json({ ok: false, msg: 'Either requestId or email is required' });
+    }
+    
+    const out = await verifyOtp(requestId || otpDoc.requestId, String(code).trim(), 'email');
     return res.status(out.status || (out.ok ? 200 : 400)).json(out);
   } catch (e) {
+    console.error('Error in verifyEmailOtp:', e);
     return res.status(500).json({ ok: false, msg: 'Server error', error: e.message });
   }
 };
@@ -202,56 +222,14 @@ exports.resendEmailVerificationForUser = async (req, res) => {
     console.log(`Sending verification email to ${email}`);
     const normalized = email.toLowerCase().trim();
     
-    // Generate OTP and get requestId
+    // Use the existing sendOtp function which will handle OTP generation and email sending
     const out = await sendOtp(normalized, 'email');
     
-    if (!out.ok) {
-      console.error('Failed to generate OTP:', out.msg);
-      return res.status(400).json({
-        ok: false,
-        msg: out.msg || 'Failed to generate verification code'
-      });
+    // If OTP was sent successfully, include the verification link in the response
+    if (out.ok) {
+      const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:8080'}/verify-email?email=${encodeURIComponent(normalized)}`;
+      out.verificationLink = verificationLink;
     }
-    
-    // Get the OTP from the database to include in the email
-    const otpDoc = await OTPModel.findOne({ requestId: out.requestId });
-    if (!otpDoc) {
-      console.error('Failed to find OTP in database');
-      return res.status(500).json({
-        ok: false,
-        msg: 'Failed to process verification request'
-      });
-    }
-    
-    const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?email=${encodeURIComponent(normalized)}&requestId=${out.requestId}`;
-    
-    // Send the verification email with OTP and link
-    const emailResult = await sendOtp(normalized, 'email', {
-      subject: 'Your Email Verification Code',
-      text: `Your verification code is: ${otpDoc.otp}\n\nOr click this link to verify: ${verificationLink}\n\nThis code will expire in ${OTP_EXP_MIN} minutes.`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2>Verify Your Email Address</h2>
-          <p>Your verification code is:</p>
-          <div style="font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; background: #f5f5f5; padding: 15px; text-align: center; border-radius: 4px;">
-            ${otpDoc.otp}
-          </div>
-          <p>Enter this code on the verification page to complete the process.</p>
-          <p style="margin-top: 30px;">Or click the button below to verify your email:</p>
-          <a href="${verificationLink}" 
-             style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; 
-                    text-decoration: none; border-radius: 4px; margin: 10px 0 20px 0;">
-            Verify Email Now
-          </a>
-          <p style="color: #666; font-size: 14px; margin-top: 30px;">
-            This code will expire in ${OTP_EXP_MIN} minutes. If you didn't request this, please ignore this email.
-          </p>
-        </div>
-      `
-    });
-    
-    // Use the email sending result as the final output
-    out = emailResult;
     
     if (!out.ok) {
       console.error('Failed to send OTP:', out.msg);
