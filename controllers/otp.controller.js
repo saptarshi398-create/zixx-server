@@ -30,7 +30,8 @@ async function sendOtp(target, channel) {
   await OTPModel.create({ requestId, target, channel, codeHash, expiresAt });
 
   const brand = process.env.BRAND_NAME || 'Zixx';
-  const message = `${brand} verification code: ${code}. It expires in ${OTP_EXP_MIN} minutes.`;
+  const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:8080'}/verify-email?email=${encodeURIComponent(target)}&requestId=${requestId}`;
+  const message = `${brand} verification code: ${code}. It expires in ${OTP_EXP_MIN} minutes.\n\nOr click this link to verify: ${verificationLink}`;
 
   let sent = false;
   if (channel === 'email') {
@@ -53,6 +54,19 @@ async function sendOtp(target, channel) {
               <div style="display:inline-block;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 18px;letter-spacing:6px;font-weight:800;font-size:28px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;">
                 ${code}
               </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 24px 24px;text-align:center;">
+              <a href="${verificationLink}" 
+                 style="display: inline-block; padding: 12px 24px; background-color: #4F46E5; color: white; 
+                        text-decoration: none; border-radius: 4px; margin: 10px 0 20px 0;">
+                Verify Email Now
+              </a>
+              <p style="color: #666; font-size: 14px; margin-top: 10px;">
+                Or copy and paste this link in your browser:<br>
+                <span style="color: #4F46E5; word-break: break-all;">${verificationLink}</span>
+              </p>
             </td>
           </tr>
           <tr>
