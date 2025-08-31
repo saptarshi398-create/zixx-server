@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
 const { OTPModel } = require('../models/otp.model');
+const { UserModel } = require('../models/users.model.js');
 const { sendEmail } = require('../utils/mailer');
 const { sendSMS } = require('../utils/sms');
 
@@ -100,7 +101,18 @@ exports.sendEmailOtp = async (req, res) => {
   try {
     const { email } = req.body || {};
     if (!email) return res.status(400).json({ ok: false, msg: 'Email required' });
-    const out = await sendOtp(String(email).toLowerCase().trim(), 'email');
+    const normalized = String(email).toLowerCase().trim();
+    // Prevent sending OTP for already registered emails
+    try {
+      const existing = await UserModel.findOne({ email: normalized }).lean();
+      if (existing) {
+        return res.status(409).json({ ok: false, msg: 'Email already registered. Please login instead.' });
+      }
+    } catch (e) {
+      // if check fails, do not block; log and continue
+      console.error('[sendEmailOtp] user existence check failed:', e?.message || e);
+    }
+    const out = await sendOtp(normalized, 'email');
     return res.status(out.status || (out.ok ? 200 : 400)).json(out);
   } catch (e) {
     return res.status(500).json({ ok: false, msg: 'Server error', error: e.message });
