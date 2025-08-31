@@ -635,4 +635,53 @@ exports.logoutRedirect = (req, res) => {
   } catch (err) {
     return res.status(500).json({ msg: 'Logout redirect failed', ok: false, error: err.message });
   }
-}
+};
+
+// =====================
+// Verify Email
+// =====================
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ ok: false, msg: 'Email is required' });
+    }
+    
+    // Find the user by email
+    const user = await UserModel.findOne({ email: email.toLowerCase().trim() });
+    
+    if (!user) {
+      return res.status(404).json({ ok: false, msg: 'User not found' });
+    }
+    
+    // Check if email is already verified
+    if (user.emailVerified) {
+      return res.status(400).json({ ok: false, msg: 'Email is already verified' });
+    }
+    
+    // Mark email as verified
+    user.emailVerified = true;
+    user.emailVerifiedAt = new Date();
+    await user.save();
+    
+    // Return success response
+    return res.status(200).json({ 
+      ok: true, 
+      msg: 'Email verified successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        emailVerified: user.emailVerified
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error in verifyEmail:', error);
+    return res.status(500).json({ 
+      ok: false, 
+      msg: 'Server error during email verification',
+      error: error.message 
+    });
+  }
+};

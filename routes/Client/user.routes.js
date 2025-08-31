@@ -14,7 +14,8 @@ const {
   logoutUser,
   logoutRedirect,
   updateUser,
-  changePassword
+  changePassword,
+  verifyEmail
 } = require("../../controllers/user.controler");
 const { sendEmailOtp, verifyEmailOtp, sendPhoneOtp, verifyPhoneOtp, resendEmailVerificationForUser } = require("../../controllers/otp.controller");
 const { authenticator } = require("../../middlewares/authenticator.middleware");
@@ -54,6 +55,9 @@ UserRouter.post('/otp/phone/verify', verifyPhoneOtp);
 
 // Resend email verification for the authenticated user
 UserRouter.post('/user/resend-verification', authenticator, resendEmailVerificationForUser);
+
+// Verify email after OTP validation
+UserRouter.post('/user/verify-email', authenticator, verifyEmail);
 
 UserRouter.get("/user/me", authenticator, getCurrentUserInfo);
 
