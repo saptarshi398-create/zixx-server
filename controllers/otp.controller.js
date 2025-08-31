@@ -33,8 +33,40 @@ async function sendOtp(target, channel) {
 
   let sent = false;
   if (channel === 'email') {
-    const html = `<p>Your ${brand} verification code is <b>${code}</b>. It expires in ${OTP_EXP_MIN} minutes.</p>`;
-    sent = await sendEmail(target, `${brand} verification code`, message, html);
+    const html = `
+      <div style="background:#f6f7fb;padding:24px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e6e8ef;">
+          <tr>
+            <td style="padding:20px 24px;background:#111;color:#fff;font-weight:700;font-size:18px;">
+              ${brand}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 24px 8px 24px;">
+              <h1 style="margin:0 0 8px 0;font-size:20px;">Your verification code</h1>
+              <p style="margin:0;color:#4b5563;font-size:14px;">Use this code to verify your email. This code expires in ${OTP_EXP_MIN} minutes.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 24px 24px 24px;text-align:center;">
+              <div style="display:inline-block;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 18px;letter-spacing:6px;font-weight:800;font-size:28px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;">
+                ${code}
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 24px 24px;color:#6b7280;font-size:12px;">
+              <p style="margin:0">If you did not request this, you can safely ignore this email.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 24px;background:#f9fafb;color:#6b7280;font-size:12px;border-top:1px solid #e6e8ef;">
+              <p style="margin:0">© ${new Date().getFullYear()} ${brand}. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </div>`;
+    sent = await sendEmail(target, `${brand} Verification Code`, message, html);
   } else {
     sent = await sendSMS(target, message);
   }

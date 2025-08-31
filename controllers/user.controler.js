@@ -35,36 +35,41 @@ exports.userRegister = async (req, res) => {
     const normalizedEmail = String(email || '').toLowerCase().trim();
     const normalizedPhone = phone !== undefined && phone !== null ? String(phone).trim() : '';
 
-    // Require OTP verification tokens
-    if (!emailVerifyToken || !phoneVerifyToken) {
-      return res.status(400).json({ msg: "Email and Phone verification required", ok: false });
+    // Require email OTP verification token; phone is optional for now
+    if (!emailVerifyToken) {
+      return res.status(400).json({ msg: "Email verification required", ok: false });
     }
 
-    // Validate tokens issued by OTP controller
+    // Validate tokens issued by OTP controller (phone optional)
     let emailTok, phoneTok;
     try {
       emailTok = jwt.verify(emailVerifyToken, process.env.JWT_SECRET);
     } catch (e) {
       return res.status(401).json({ msg: "Invalid or expired email verification", ok: false });
     }
-    try {
-      phoneTok = jwt.verify(phoneVerifyToken, process.env.JWT_SECRET);
-    } catch (e) {
-      return res.status(401).json({ msg: "Invalid or expired phone verification", ok: false });
+    if (phoneVerifyToken) {
+      try {
+        phoneTok = jwt.verify(phoneVerifyToken, process.env.JWT_SECRET);
+      } catch (e) {
+        return res.status(401).json({ msg: "Invalid or expired phone verification", ok: false });
+      }
     }
 
     // Enforce token claims
     if (!(emailTok && emailTok.kind === 'otp-verify' && emailTok.channel === 'email')) {
       return res.status(401).json({ msg: 'Invalid email verification token', ok: false });
     }
-    if (!(phoneTok && phoneTok.kind === 'otp-verify' && phoneTok.channel === 'phone')) {
+    // Phone token is optional
+    if (phoneVerifyToken && !(phoneTok && phoneTok.kind === 'otp-verify' && phoneTok.channel === 'phone')) {
       return res.status(401).json({ msg: 'Invalid phone verification token', ok: false });
     }
     if (normalizedEmail !== String(emailTok.target || '').toLowerCase()) {
       return res.status(400).json({ msg: 'Email does not match verified target', ok: false });
     }
-    if (normalizedPhone && normalizedPhone !== String(phoneTok.target || '').trim()) {
-      return res.status(400).json({ msg: 'Phone does not match verified target', ok: false });
+    if (phoneVerifyToken) {
+      if (normalizedPhone && normalizedPhone !== String(phoneTok.target || '').trim()) {
+        return res.status(400).json({ msg: 'Phone does not match verified target', ok: false });
+      }
     }
 
     const existingUser = await UserModel.findOne({ email: normalizedEmail });
