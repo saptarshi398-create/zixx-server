@@ -105,7 +105,7 @@ UserRouter.get(
       if (isDebug) console.log('Google OAuth callback hit with URL:', req.originalUrl);
       
       // Always redirect to production frontend after Google auth
-      const productionFrontend = 'https://zixx.vercel.app';
+      const productionFrontend = 'https://zixx.in';
       req.session.returnTo = `${productionFrontend}/auth`;
       
       // If there's a returnTo in query, append it as a parameter
@@ -114,7 +114,7 @@ UserRouter.get(
           const returnTo = req.query.returnTo;
           const url = new URL(returnTo);
           const allowedDomains = [
-            'zixx.vercel.app',
+            'zixx.in',
             'zixx-admin.vercel.app'
           ];
           
@@ -242,7 +242,7 @@ UserRouter.get(
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         path: '/',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        domain: process.env.NODE_ENV === 'production' ? '.zixx.vercel.app' : undefined
+        domain: process.env.NODE_ENV === 'production' ? '.zixx.in' : undefined
       };
 
       res.cookie('token', token, cookieOpts);
@@ -257,6 +257,7 @@ UserRouter.get(
           const url = new URL(req.session.returnTo);
           const allowedDomains = [
             'zixx.vercel.app',
+            'zixx.in',
             'zixx-admin.vercel.app',
             'localhost:3000',
             'localhost:8080',

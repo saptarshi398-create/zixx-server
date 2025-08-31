@@ -57,6 +57,7 @@ if (process.env.NODE_ENV === 'production') {
   allowedOrigins = Array.from(new Set([
     ...allowedOrigins,
     'https://zixx.vercel.app',
+    'https://zixx.in',
     'https://zixx-admin.vercel.app',
     'https://zixx-admin-hzavv7qnl-ajay-mondals-projects.vercel.app',
     'https://zixx-admin-*.vercel.app', // Wildcard for preview deployments
