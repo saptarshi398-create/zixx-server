@@ -215,6 +215,47 @@ UserRouter.get(
         } catch (error) {
           throw new Error('Failed to create user account');
         }
+      } else {
+        // Update existing user with Google data if they don't have it
+        let shouldUpdate = false;
+        
+        // Update profile picture if user doesn't have one or if Google has a newer one
+        if (avatar && (!user.profile_pic || user.profile_pic === '' || user.profile_pic === '/placeholder.svg')) {
+          user.profile_pic = avatar;
+          shouldUpdate = true;
+        }
+        
+        // Update name fields if they are empty or default values
+        if (given && (!user.first_name || user.first_name === 'N/A' || user.first_name === '')) {
+          user.first_name = given;
+          shouldUpdate = true;
+        }
+        
+        if (family && (!user.last_name || user.last_name === 'N/A' || user.last_name === '')) {
+          user.last_name = family;
+          shouldUpdate = true;
+        }
+        
+        // Update auth provider info
+        if (!user.authProvider || user.authProvider !== 'google') {
+          user.authProvider = 'google';
+          user.authProviderId = profile.id;
+          shouldUpdate = true;
+        }
+        
+        // Ensure email is verified for Google users
+        if (!user.emailVerified) {
+          user.emailVerified = true;
+          shouldUpdate = true;
+        }
+        
+        if (shouldUpdate) {
+          try {
+            await user.save();
+          } catch (error) {
+            console.error('Failed to update existing user with Google data:', error);
+          }
+        }
       }
 
       // Generate JWT token with user data
