@@ -99,15 +99,25 @@ async function verifyOtp(requestId, code, channel) {
 
   const match = await bcrypt.compare(code, rec.codeHash);
   if (!match) {
-    await OTPModel.updateOne({ _id: rec._id }, { $inc: { attempts: 1 } });
-    return { ok: false, status: 400, msg: 'Incorrect OTP.' };
+    rec.attempts += 1;
+    await rec.save();
+    return { ok: false, status: 400, msg: 'Invalid code.' };
   }
 
-  await OTPModel.updateOne({ _id: rec._id }, { $set: { used: true } });
-
-  // Issue a short-lived verification token
-  const token = jwt.sign({ kind: 'otp-verify', channel, target: rec.target }, process.env.JWT_SECRET, { expiresIn: '10m' });
-  return { ok: true, data: { verified: true, token, target: rec.target } };
+  rec.used = true;
+  await rec.save();
+  
+  // Find the user by email to include in the response
+  const user = await UserModel.findOne({ email: rec.target }).select('-password -refreshToken').lean();
+  
+  return { 
+    ok: true, 
+    data: { 
+      requestId: rec.requestId,
+      email: rec.target,
+      user: user ? { ...user, emailVerified: true } : null
+    } 
+  };
 }
 
 // Express handlers

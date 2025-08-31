@@ -655,25 +655,39 @@ exports.verifyEmail = async (req, res) => {
       return res.status(404).json({ ok: false, msg: 'User not found' });
     }
     
-    // Check if email is already verified
+    // If already verified, just return success with current user data
     if (user.emailVerified) {
-      return res.status(400).json({ ok: false, msg: 'Email is already verified' });
+      const currentUser = await UserModel.findById(user._id).select('-password -refreshToken').lean();
+      return res.status(200).json({ 
+        ok: true, 
+        msg: 'Email was already verified',
+        user: currentUser
+      });
     }
     
     // Mark email as verified
-    user.emailVerified = true;
-    user.emailVerifiedAt = new Date();
-    await user.save();
+    const now = new Date();
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      user._id,
+      { 
+        $set: { 
+          emailVerified: true,
+          emailVerifiedAt: now,
+          updatedAt: now
+        } 
+      },
+      { new: true, runValidators: true }
+    ).select('-password -refreshToken').lean();
     
-    // Return success response
+    if (!updatedUser) {
+      throw new Error('Failed to update user verification status');
+    }
+    
+    // Return success response with complete user data
     return res.status(200).json({ 
       ok: true, 
       msg: 'Email verified successfully',
-      user: {
-        id: user._id,
-        email: user.email,
-        emailVerified: user.emailVerified
-      }
+      user: updatedUser
     });
     
   } catch (error) {
