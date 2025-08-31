@@ -15,6 +15,7 @@ const {
   logoutRedirect,
   updateUser
 } = require("../../controllers/user.controler");
+const { sendEmailOtp, verifyEmailOtp, sendPhoneOtp, verifyPhoneOtp } = require("../../controllers/otp.controller");
 const { authenticator } = require("../../middlewares/authenticator.middleware");
 const { cloudinaryUploadMiddleware, upload } = require("../../middlewares/cloudinaryUpload");
 const { UserModel } = require("../../models/users.model");
@@ -43,6 +44,12 @@ UserRouter.use(passport.session());
 UserRouter.post("/register", userRegister);
 
 UserRouter.post("/login", userLogin);
+
+// OTP routes (no auth)
+UserRouter.post('/otp/email/send', sendEmailOtp);
+UserRouter.post('/otp/email/verify', verifyEmailOtp);
+UserRouter.post('/otp/phone/send', sendPhoneOtp);
+UserRouter.post('/otp/phone/verify', verifyPhoneOtp);
 
 UserRouter.get("/user/me", authenticator, getCurrentUserInfo);
 

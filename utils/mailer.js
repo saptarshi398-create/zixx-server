@@ -10,6 +10,18 @@ const transporter = nodemailer.createTransport({
   } : undefined,
 });
 
+async function sendEmail(to, subject, text, html) {
+  if (!to) return;
+  const from = process.env.SMTP_FROM || 'no-reply@zixx.app';
+  try {
+    await transporter.sendMail({ from, to, subject, text, html });
+    return true;
+  } catch (e) {
+    console.error('Email send failed:', e?.message || e);
+    return false;
+  }
+}
+
 async function sendOrderReceipt(to, order) {
   if (!to) return;
   const from = process.env.SMTP_FROM || 'no-reply@zixx.app';
@@ -34,4 +46,4 @@ async function sendOrderReceipt(to, order) {
   }
 }
 
-module.exports = { sendOrderReceipt };
+module.exports = { sendOrderReceipt, sendEmail };

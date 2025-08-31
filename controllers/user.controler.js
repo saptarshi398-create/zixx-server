@@ -24,11 +24,50 @@ exports.userRegister = async (req, res) => {
       profile_pic,
       wishlist = [],
       orders = [],
+      // Verification tokens provided by client after OTP verification
+      emailVerifyToken,
+      phoneVerifyToken,
+      // allow fallback flags (should not be relied on)
       emailVerified = false,
       isActive = true,
     } = req.body;
 
-    const existingUser = await UserModel.findOne({ email });
+    const normalizedEmail = String(email || '').toLowerCase().trim();
+    const normalizedPhone = phone !== undefined && phone !== null ? String(phone).trim() : '';
+
+    // Require OTP verification tokens
+    if (!emailVerifyToken || !phoneVerifyToken) {
+      return res.status(400).json({ msg: "Email and Phone verification required", ok: false });
+    }
+
+    // Validate tokens issued by OTP controller
+    let emailTok, phoneTok;
+    try {
+      emailTok = jwt.verify(emailVerifyToken, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ msg: "Invalid or expired email verification", ok: false });
+    }
+    try {
+      phoneTok = jwt.verify(phoneVerifyToken, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ msg: "Invalid or expired phone verification", ok: false });
+    }
+
+    // Enforce token claims
+    if (!(emailTok && emailTok.kind === 'otp-verify' && emailTok.channel === 'email')) {
+      return res.status(401).json({ msg: 'Invalid email verification token', ok: false });
+    }
+    if (!(phoneTok && phoneTok.kind === 'otp-verify' && phoneTok.channel === 'phone')) {
+      return res.status(401).json({ msg: 'Invalid phone verification token', ok: false });
+    }
+    if (normalizedEmail !== String(emailTok.target || '').toLowerCase()) {
+      return res.status(400).json({ msg: 'Email does not match verified target', ok: false });
+    }
+    if (normalizedPhone && normalizedPhone !== String(phoneTok.target || '').trim()) {
+      return res.status(400).json({ msg: 'Phone does not match verified target', ok: false });
+    }
+
+    const existingUser = await UserModel.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(400).json({ msg: "User already exists", ok: false });
     }
@@ -37,9 +76,9 @@ exports.userRegister = async (req, res) => {
       first_name,
       middle_name: middle_name || "",
       last_name,
-      email,
+      email: normalizedEmail,
       password,
-      phone: phone || "N/A",
+      phone: normalizedPhone || "N/A",
       gender: gender || "N/A",
       dob: dob || "N/A",
       // schema enum expects 'admin' or 'customer' — default to 'customer' when not provided
@@ -48,7 +87,8 @@ exports.userRegister = async (req, res) => {
       profile_pic: profile_pic || "https://imgs.search.brave.com/RVlCqw3p0uoiaetgT8E5nbaIalanB95GbXOOaURZMrA/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9jZG4t/aWNvbnMtcG5nLmZy/ZWVwaWsuY29tLzI1/Ni84MDA3LzgwMDc5/NTMucG5nP3NlbXQ9/YWlzX3doaXRlX2xh/YmVs",
       wishlist: wishlist || [],
       orders: orders || [],
-      emailVerified: emailVerified || false,
+      // Mark email verified because OTP was validated
+      emailVerified: true,
       isActive: isActive || true,
     });
 
