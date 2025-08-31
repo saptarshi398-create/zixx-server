@@ -14,7 +14,7 @@ function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-async function sendOtp(target, channel) {
+async function sendOtp(target, channel, includeLink = true) {
   const requestId = uuidv4();
   const code = generateCode();
   const codeHash = await bcrypt.hash(code, 10);
@@ -31,11 +31,13 @@ async function sendOtp(target, channel) {
 
   const brand = process.env.BRAND_NAME || 'Zixx';
   const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:8080'}/verify-email?email=${encodeURIComponent(target)}&requestId=${requestId}`;
-  const message = `${brand} verification code: ${code}. It expires in ${OTP_EXP_MIN} minutes.\n\nOr click this link to verify: ${verificationLink}`;
-
-  let sent = false;
-  if (channel === 'email') {
-    const html = `
+  
+  let message, html;
+  
+  if (includeLink) {
+    // For account verification - include both OTP and link
+    message = `${brand} verification code: ${code}. It expires in ${OTP_EXP_MIN} minutes.\n\nOr click this link to verify: ${verificationLink}`;
+    html = `
       <div style="background:#f6f7fb;padding:24px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;">
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e6e8ef;">
           <tr>
@@ -81,6 +83,46 @@ async function sendOtp(target, channel) {
           </tr>
         </table>
       </div>`;
+  } else {
+    // For signup - only OTP, no link
+    message = `${brand} verification code: ${code}. It expires in ${OTP_EXP_MIN} minutes.`;
+    html = `
+      <div style="background:#f6f7fb;padding:24px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e6e8ef;">
+          <tr>
+            <td style="padding:20px 24px;background:#111;color:#fff;font-weight:700;font-size:18px;">
+              ${brand}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 24px 8px 24px;">
+              <h1 style="margin:0 0 8px 0;font-size:20px;">Your verification code</h1>
+              <p style="margin:0;color:#4b5563;font-size:14px;">Use this code to complete your registration. This code expires in ${OTP_EXP_MIN} minutes.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 24px 24px 24px;text-align:center;">
+              <div style="display:inline-block;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 18px;letter-spacing:6px;font-weight:800;font-size:28px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;">
+                ${code}
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 24px 24px;color:#6b7280;font-size:12px;">
+              <p style="margin:0">If you did not request this, you can safely ignore this email.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 24px;background:#f9fafb;color:#6b7280;font-size:12px;border-top:1px solid #e6e8ef;">
+              <p style="margin:0">© ${new Date().getFullYear()} ${brand}. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </div>`;
+  }
+
+  let sent = false;
+  if (channel === 'email') {
     sent = await sendEmail(target, `${brand} Verification Code`, message, html);
   } else {
     sent = await sendSMS(target, message);
@@ -185,7 +227,7 @@ exports.sendEmailOtp = async (req, res) => {
       // if check fails, do not block; log and continue
       console.error('[sendEmailOtp] user existence check failed:', e?.message || e);
     }
-    const out = await sendOtp(normalized, 'email');
+    const out = await sendOtp(normalized, 'email', false); // false = no link for signup
     return res.status(out.status || (out.ok ? 200 : 400)).json(out);
   } catch (e) {
     return res.status(500).json({ ok: false, msg: 'Server error', error: e.message });
@@ -303,7 +345,8 @@ exports.resendEmailVerificationForUser = async (req, res) => {
     const normalized = email.toLowerCase().trim();
     
     // Use the existing sendOtp function which will handle OTP generation and email sending
-    const out = await sendOtp(normalized, 'email');
+    // For account verification, include the verification link
+    const out = await sendOtp(normalized, 'email', true); // true = include link for account verification
     
     // If OTP was sent successfully, include the verification link in the response
     if (out.ok) {
