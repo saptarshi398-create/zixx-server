@@ -15,10 +15,8 @@ async function sendSMS(to, body) {
       await client.messages.create({ to, from: twilioFrom, body });
       return true;
     }
-    console.log(`[SMS:DRYRUN] To:${to} -> ${body}`);
     return true;
   } catch (e) {
-    console.error('SMS send failed:', e?.message || e);
     return false;
   }
 }

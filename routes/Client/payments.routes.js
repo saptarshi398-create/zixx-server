@@ -96,7 +96,6 @@ try {
         await sendOrderReceipt(to, order);
         return res.json({ ok: true, msg: 'Test email queued (best-effort)', to });
       } catch (e) {
-        console.error('test-email failed:', e?.message || e);
         return res.status(500).json({ ok: false, msg: e?.message || 'Failed to send test email' });
       }
     });

@@ -239,7 +239,6 @@ exports.sendEmailOtp = async (req, res) => {
       }
     } catch (e) {
       // if check fails, do not block; log and continue
-      console.error('[sendEmailOtp] user existence check failed:', e?.message || e);
     }
     const out = await sendOtp(normalized, 'email', false); // false = no link for signup
     return res.status(out.status || (out.ok ? 200 : 400)).json(out);
@@ -277,7 +276,6 @@ exports.verifyEmailOtp = async (req, res) => {
     return res.status(out.status || (out.ok ? 200 : 400)).json(out);
     
   } catch (e) {
-    console.error('Error in verifyEmailOtp:', e);
     return res.status(500).json({ 
       ok: false, 
       msg: 'An error occurred while verifying your code. Please try again.',
@@ -313,12 +311,10 @@ exports.verifyPhoneOtp = async (req, res) => {
 // Requires authenticator middleware to populate req.user
 exports.resendEmailVerificationForUser = async (req, res) => {
   try {
-    console.log('Resend verification request received. User:', req.user);
     
     // Get user from request (set by authenticator middleware)
     const user = req.user;
     if (!user) {
-      console.error('No user found in request');
       return res.status(401).json({ ok: false, msg: 'Unauthorized: No user session' });
     }
 
@@ -335,7 +331,6 @@ exports.resendEmailVerificationForUser = async (req, res) => {
         }
         email = found.email;
       } catch (dbError) {
-        console.error('Database error:', dbError);
         return res.status(500).json({ ok: false, msg: 'Error fetching user data' });
       }
     }
@@ -351,11 +346,9 @@ exports.resendEmailVerificationForUser = async (req, res) => {
         return res.status(400).json({ ok: false, msg: 'Email already verified' });
       }
     } catch (dbError) {
-      console.error('Error checking email verification status:', dbError);
       // Continue anyway - better to send a duplicate email than to fail
     }
 
-    console.log(`Sending verification email to ${email}`);
     const normalized = email.toLowerCase().trim();
     
     // Use the existing sendOtp function which will handle OTP generation and email sending
@@ -369,14 +362,12 @@ exports.resendEmailVerificationForUser = async (req, res) => {
     }
     
     if (!out.ok) {
-      console.error('Failed to send OTP:', out.msg);
       return res.status(400).json({
         ok: false,
         msg: out.msg || 'Failed to send verification email'
       });
     }
     
-    console.log('Verification email sent successfully');
     return res.json({
       ok: true,
       msg: 'Verification email sent successfully',

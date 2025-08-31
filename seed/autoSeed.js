@@ -147,9 +147,7 @@ async function autoSeed() {
     } else {
       results.transactions = { created: 0 };
     }
-    // console.log('[autoSeed] results:', results);
   } catch (e) {
-    console.warn('[autoSeed] seeding failed:', e && e.message ? e.message : e);
   }
 }
 

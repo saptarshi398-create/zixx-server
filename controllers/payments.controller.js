@@ -103,7 +103,7 @@ exports.handleRazorpayWebhook = async (req, res) => {
     const body = req.rawBody || (Buffer.isBuffer(payload) ? payload : Buffer.from(JSON.stringify(payload)));
     const expected = crypto.createHmac('sha256', webhookSecret).update(body).digest('hex');
     if (expected !== signature) {
-      console.warn(`[${new Date().toISOString()}] Razorpay webhook signature mismatch`, {
+      console.warn('Invalid Razorpay webhook signature', {
         path: req.originalUrl,
         providedSignature: signature,
         expectedSignature: expected,
@@ -142,7 +142,6 @@ exports.handleRazorpayWebhook = async (req, res) => {
         const user = await UserModel.findById(order.userId);
         await sendOrderReceipt(user?.email, order);
       } catch (e) {
-        console.error('Webhook: failed to send receipt email:', e?.message || e);
       }
       return res.json({ ok: true, msg: 'Order updated to paid via webhook' });
     }

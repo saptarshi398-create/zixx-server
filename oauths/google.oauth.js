@@ -12,7 +12,6 @@ const getCallbackURL = () => {
   // Ensure no double slashes in the URL
   const cleanBase = baseUrl.replace(/\/+$/, '');
   const callbackUrl = `${cleanBase}/clients/auth/google/callback`;
-  console.log('Google OAuth Callback URL:', callbackUrl);
   return callbackUrl;
 };
 

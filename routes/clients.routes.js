@@ -31,7 +31,6 @@ try {
   const { ContactRouter } = require("./Client");
   ClientsRouters.use("/clients", ContactRouter);
 } catch (e) {
-  console.warn("[clients.routes] ContactRouter not available:", e?.message || e);
 }
 
 ClientsRouters.get("/clients", (req, res) => {

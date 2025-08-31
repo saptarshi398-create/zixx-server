@@ -27,9 +27,6 @@ exports.getDashboardStats = async (req, res) => {
     const productsRes = await ProductModel.find();
     const ordersRes = await OrderModel.find();
 
-    // console.log("Customers:", usersRes);
-    // console.log("Orders:", ordersRes);
-    // console.log("Products:", productsRes);
 
     const customers = usersRes || [];
     const orders = ordersRes || [];
@@ -153,7 +150,6 @@ exports.getDashboardStats = async (req, res) => {
       products
     });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: error.message });
   }
 };

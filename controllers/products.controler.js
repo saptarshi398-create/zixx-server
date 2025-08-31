@@ -107,17 +107,14 @@ exports.getProductByName = async (req, res) => {
   try {
     const name = decodeURIComponent(req.params.name).trim();
     // Log the incoming name for debugging
-    console.log("[GET /products/byname/:name] Searching for:", name);
     // Case-insensitive, trimmed exact match
     let product = await ProductModel.findOne({ title: { $regex: `^${name}$`, $options: "i" } });
     if (product) {
       return res.json({ data: product, ok: true });
     }
     // Fallback: partial match (contains)
-    console.log("[GET /products/byname/:name] Exact match not found, trying partial match:", name);
     const products = await ProductModel.find({ title: { $regex: name, $options: "i" } });
     if (!products || products.length === 0) {
-      console.log("[GET /products/byname/:name] Not found (even partial):", name);
       return res.status(404).json({ ok: false, message: "Product not found" });
     }
     // If only one product found, return as single object for backward compatibility
@@ -127,7 +124,6 @@ exports.getProductByName = async (req, res) => {
     // If multiple products found, return as array
     return res.json({ data: products, ok: true, multiple: true });
   } catch (error) {
-    console.error("[GET /products/byname/:name] Error:", error);
     res.status(500).json({ ok: false, message: "Error fetching product by name", error: error.message });
   }
 };
@@ -386,7 +382,6 @@ exports.updateProduct = async (req, res) => {
     }
     res.send({ msg: "Product updated", ok: true, data: updated });
   } catch (error) {
-    console.error("[PATCH /products/update/:id] Error:", error);
     res.status(500).send({ ok: false, msg: "Server error", error: error.message });
   }
 }
@@ -423,7 +418,6 @@ exports.deleteProduct = async (req, res) => {
     }
     res.send({ msg: "Product deleted", ok: true, data: deleted });
   } catch (error) {
-    console.error("[DELETE /products/delete/:id] Error:", error);
     res.status(500).send({ ok: false, msg: "Server error", error: error.message });
   }
 }

@@ -30,10 +30,8 @@ const { ProductModel } = require('../models/products.model');
       );
       if (res.upsertedCount && res.upsertedCount > 0) inserted++; else skipped++;
     }
-    console.log({ inserted, skipped });
     process.exit(0);
   } catch (e) {
-    console.error(e);
     process.exit(1);
   }
 })();

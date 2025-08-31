@@ -4,7 +4,6 @@ const { UserModel } = require("../models/users.model");
 exports.getGeography = async (req, res) => {
   try {
     const users = await UserModel.find().select('-password');
-    console.log(`Found ${users.length} users`);
 
     // Add some test data if no users have proper address data
     const testLocations = [
@@ -40,7 +39,6 @@ exports.getGeography = async (req, res) => {
       const city = address.city || '';
       const zip = address.zip || '';
 
-      console.log(`User ${user.email}: ${city}, ${state}, ${country}`);
 
       // Skip users without city or country data
       if (!country || !city) return acc;
@@ -85,14 +83,11 @@ exports.getGeography = async (req, res) => {
     
     // If no real data, add test data for demonstration
     if (formattedLocations.length === 0) {
-      console.log('No user location data found, adding test data');
       formattedLocations = testLocations;
     }
 
-    console.log(`Returning ${formattedLocations.length} locations`);
     res.status(200).json(formattedLocations);
   } catch (error) {
-    console.error('Geography API error:', error);
     res.status(500).json({ message: error.message || 'Failed to compute geography' });
   }
 };

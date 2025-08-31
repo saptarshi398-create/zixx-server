@@ -43,7 +43,6 @@ const submitContactMessage = async (req, res) => {
           await transporter.verify();
         } catch (verr) {
           emailError = verr && (verr.response || verr.message || String(verr));
-          console.warn('[contact.controller] SMTP verify failed:', emailError);
           // fallthrough to still try sendMail, as some servers fail verify but allow send
         }
 
@@ -84,16 +83,13 @@ const submitContactMessage = async (req, res) => {
         emailSent = Boolean(info?.messageId);
         emailMessageId = info?.messageId;
       } else {
-        console.warn('[contact.controller] SMTP not fully configured. Skipping email send.');
       }
     } catch (e) {
       emailError = e?.response || e?.message || String(e);
-      console.warn('[contact.controller] SMTP send failed:', emailError);
     }
 
     return res.status(200).json({ ok: true, emailSent, emailMessageId, emailError });
   } catch (error) {
-    console.error('[contact.controller] unexpected error', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });
   }
 };

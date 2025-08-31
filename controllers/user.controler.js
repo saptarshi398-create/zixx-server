@@ -100,7 +100,6 @@ exports.userRegister = async (req, res) => {
     await newUser.save();
     res.status(201).json({ msg: "User registered successfully", ok: true });
   } catch (error) {
-    console.error(error);
 
     res.status(500).json({ msg: "Server error", error: error.message, ok: false });
   }
@@ -212,21 +211,16 @@ exports.getCurrentUserInfo = async (req, res) => {
       try {
         decoded = jwt.verify(token, process.env.JWT_SECRET);
       } catch (e) {
-        console.error('[user.controler] token verify failed for getCurrentUserInfo:', e.message);
         return res.status(401).json({ msg: 'Invalid token', ok: false });
       }
       userId = decoded.userid || decoded.id;
     }
-    if (isDebug) console.log('[user.controler] getCurrentUserInfo - resolved userId:', userId);
-    if (isDebug) console.log('[user.controler] getCurrentUserInfo - incoming Authorization header:', req.headers.authorization);
 
     const user = await UserModel.findById(userId).select("-password");
-    if (isDebug) console.log('[user.controler] getCurrentUserInfo - db user found:', !!user);
 
     if (!user) return res.status(404).json({ msg: "User not found", ok: false });
     res.json({ user, ok: true });
   } catch (err) {
-    console.error('[user.controler] getCurrentUserInfo error:', err);
 
     res.status(401).json({ msg: "Invalid token", ok: false });
   }
@@ -401,7 +395,6 @@ exports.deleteUsersByAdmin = async (req, res) => {
     if (!user) {
       return res.status(404).json({ msg: "User not found", ok: false });
     }
-    if (isDebug) console.log("User deleted:", user);
 
     res.json({ msg: "User deleted", ok: true });
   } catch (error) {
@@ -426,7 +419,6 @@ exports.updateUser = async (req, res) => {
 
         // Debug incoming payload when enabled
         if (isDebug) {
-            try { console.log('[updateUser] incoming updates:', { ...updates, profile_pic: updates.profile_pic ? '[set]' : undefined }); } catch {}
         }
 
         // If phone is present, validate and convert to number
@@ -507,7 +499,6 @@ exports.updateUser = async (req, res) => {
 
         return res.json({ msg: "User updated successfully", user: updatedUser, ok: true });
     } catch (error) {
-        console.error('[updateUser] error:', error);
         return res.status(500).json({ msg: "Failed to update user", error: error.message, ok: false });
     }
 }
@@ -534,18 +525,15 @@ exports.logoutUser = (req, res) => {
         req.session.destroy(() => {});
       }
     } catch (err) {
-      console.error('[logoutUser] session destroy error:', err);
     }
 
     // Log incoming cookies for debugging
     try {
-      if (isDebug) console.log('[logoutUser] Incoming cookies:', req.headers.cookie || 'none');
     } catch (err) {}
 
     // Send success response
     return res.json({ msg: 'Logged out', ok: true });
   } catch (err) {
-    console.error('[logoutUser] Error:', err);
 
     return res.status(500).json({ msg: 'Logout failed', ok: false, error: err.message });
   }
@@ -601,7 +589,6 @@ exports.changePassword = async (req, res) => {
 
     res.json({ msg: 'Password updated successfully', ok: true });
   } catch (error) {
-    console.error('[changePassword] error:', error);
     res.status(500).json({ msg: 'Server error', error: error.message, ok: false });
   }
 };
@@ -623,7 +610,6 @@ exports.logoutRedirect = (req, res) => {
 
     try { if (req.session) req.session.destroy(() => {}); } catch (e) {}
     // optional diagnostic log
-    try { if (isDebug) console.log('[logoutRedirect] incoming cookies:', req.headers.cookie); } catch (e) {}
 
     // Redirect back to provided returnTo or frontend auth
     let frontend = process.env.FRONTEND_URL || `http://${req.hostname}:8080`;
@@ -691,7 +677,6 @@ exports.verifyEmail = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error in verifyEmail:', error);
     return res.status(500).json({ 
       ok: false, 
       msg: 'Server error during email verification',

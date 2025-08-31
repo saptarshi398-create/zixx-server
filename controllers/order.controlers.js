@@ -317,7 +317,6 @@ exports.buyCartProducts = async (req, res) => {
         products: cartItems.map((item) => item.productId),
       });
     } catch (e) {
-      console.error('Failed to create Transaction from order:', e?.message || e);
     }
     // Send receipt email if paid
     if (order.paymentStatus === 'paid') {
@@ -325,7 +324,6 @@ exports.buyCartProducts = async (req, res) => {
         const user = await UserModel.findById(req.userid);
         await sendOrderReceipt(user?.email, order);
       } catch (e) {
-        console.error('Failed to send order receipt email:', e?.message || e);
       }
     }
     // Remove only the bought cart item if single, else all
@@ -337,7 +335,6 @@ exports.buyCartProducts = async (req, res) => {
 
     res.json({ msg: "Order placed successfully", ok: true });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ msg: "Error placing order", ok: false, error: err.message });
   }
 }
@@ -394,7 +391,6 @@ exports.buySelectedCartProducts = async (req, res) => {
         products: cartItems.map((item) => item.productId),
       });
     } catch (e) {
-      console.error('Failed to create Transaction from consolidated order:', e?.message || e);
     }
     // Send receipt email if paid
     if (order.paymentStatus === 'paid') {
@@ -402,14 +398,12 @@ exports.buySelectedCartProducts = async (req, res) => {
         const user = await UserModel.findById(req.userid);
         await sendOrderReceipt(user?.email, order);
       } catch (e) {
-        console.error('Failed to send order receipt email:', e?.message || e);
       }
     }
     await CartModel.deleteMany({ _id: { $in: cartIds }, userid: req.userid });
 
     return res.json({ ok: true, msg: 'Order placed successfully', orderId: order._id });
   } catch (err) {
-    console.error(err);
     return res.status(500).json({ ok: false, msg: 'Error placing consolidated order', error: err.message });
   }
 }
@@ -447,7 +441,6 @@ exports.cancelOrder = async (req, res) => {
         );
         order.adminNotes = `Refund initiated: ${rpRes.data?.id || 'unknown'}`;
       } catch (e) {
-        console.error('Refund initiation failed on cancel:', e?.response?.data || e?.message || e);
         return res.status(500).json({ ok: false, msg: 'Failed to initiate refund. Please try again or contact support.' });
       }
     }

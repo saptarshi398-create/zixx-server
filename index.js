@@ -118,7 +118,6 @@ const isOriginAllowed = (origin) => {
 const corsOptions = {
   origin: function (origin, cb) {
     if (isOriginAllowed(origin)) return cb(null, true);
-    console.warn("Blocked CORS origin:", origin);
     return cb(new Error("Not allowed by CORS"));
   },
   credentials: true,
@@ -128,7 +127,6 @@ const corsOptions = {
 
 // // Debug
 // app.use((req, res, next) => {
-//   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
 //   next();
 // });
 
@@ -193,7 +191,6 @@ if (process.env.NODE_ENV === "production") {
       res.sendFile(path.join(frontendPath, "index.html"));
     });
   } else {
-    console.warn('[startup] Skipping serving frontend: dist not found and SERVE_FRONTEND not set');
   }
 }
 
@@ -207,11 +204,10 @@ app.use((req, res, next) => {
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error("API error:", err);
   if (req.path.startsWith('/api/')) {
     return res.status(500).json({ ok: false, msg: err.message || 'Server error' });
   }
-  next(err);
+  next();
 });
 
 app.listen(process.env.PORT, async () => {
@@ -219,20 +215,13 @@ app.listen(process.env.PORT, async () => {
     await connection;
     console.log("✅ Server running on PORT", process.env.PORT);
     console.log("✅ Connected to MongoDB");
-    // console.log("✅ Allowed Origins:", allowedOrigins);
-    console.log("✅ Allowed Hosts:", allowedHosts);
-    // Auto-seed only when explicitly enabled: set AUTO_SEED=true
     try {
       const SEED_ENABLED = process.env.AUTO_SEED === 'true';
       if (SEED_ENABLED) {
         await autoSeed();
-      } else {
-        if (isDebug) console.log('[autoSeed] Skipped (set AUTO_SEED=true to enable)');
       }
     } catch (e) {
-      console.warn('[autoSeed] error during startup:', e && e.message ? e.message : e);
     }
   } catch (error) {
-    console.log("❌ DB Connection Error:", error);
   }
 });

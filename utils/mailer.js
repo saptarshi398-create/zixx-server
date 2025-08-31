@@ -29,7 +29,6 @@ async function sendEmail(to, subject, text, html) {
     await transporter.sendMail({ from, to, subject, text, html });
     return true;
   } catch (e) {
-    console.error('Email send failed:', e?.message || e);
     return false;
   }
 }
@@ -54,7 +53,6 @@ async function sendOrderReceipt(to, order) {
   try {
     await transporter.sendMail({ from, to, subject, text, html });
   } catch (e) {
-    console.error('Email send failed:', e?.message || e);
   }
 }
 

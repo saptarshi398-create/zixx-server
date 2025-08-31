@@ -18,10 +18,8 @@ const mongoose = require('mongoose');
   const dotenv = require('dotenv');
   if (specific && fs.existsSync(specific)) {
     dotenv.config({ path: specific });
-    console.log(`[env] Loaded ${specific}`);
   } else {
     dotenv.config({ path: fallback });
-    console.log(`[env] Loaded ${fallback}`);
   }
 })();
 
@@ -30,12 +28,10 @@ const { UserModel } = require('../models/users.model');
 (async () => {
   const mongoUrl = process.env.MONGO_URL || process.env.DBURL;
   if (!mongoUrl) {
-    console.error('❌ MONGO_URL/DBURL not set in env');
     process.exit(1);
   }
 
   await mongoose.connect(mongoUrl, { autoIndex: true });
-  console.log('✅ Connected to MongoDB');
 
   const cursor = UserModel.find({}, { password: 0 }).cursor();
   let scanned = 0;
@@ -53,7 +49,6 @@ const { UserModel } = require('../models/users.model');
         user.address = addr;
         needsSave = true;
       } catch (e) {
-        console.warn(`Skipping invalid JSON address for user ${user._id}`);
         addr = {};
         user.address = addr;
         needsSave = true;
@@ -89,12 +84,10 @@ const { UserModel } = require('../models/users.model');
         await user.save();
         updated++;
       } catch (e) {
-        console.error(`Failed to update user ${user._id}:`, e.message);
       }
     }
   }
 
-  console.log(`\nDone. Scanned: ${scanned}, Updated: ${updated}`);
   await mongoose.disconnect();
   process.exit(0);
 })();

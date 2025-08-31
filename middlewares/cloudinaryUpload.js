@@ -1,4 +1,3 @@
-// console.log('Cloudinary ENV:', {
 //   CLD_CLOUD_NAME: process.env.CLD_CLOUD_NAME,
 //   CLD_API_KEY: process.env.CLD_API_KEY,
 //   CLD_API_SECRET: process.env.CLD_API_SECRET
@@ -37,7 +36,6 @@ exports.cloudinaryUploadMiddleware = async (req, res, next) => {
     req.body.profile_pic = result.secure_url;
     next();
   } catch (err) {
-    console.log("Cloudinary upload error:", err);
     return res.status(500).json({ msg: 'Image upload failed', error: err.message, ok: false });
   }
 };

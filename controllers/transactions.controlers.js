@@ -49,7 +49,6 @@ exports.Transactions = async (req, res) => {
 
     res.status(200).json({ transactions, total });
   } catch (error) {
-    console.error('[Transactions] error:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -84,7 +83,6 @@ exports.adminBackfillTransactions = async (req, res) => {
 
     return res.json({ ok: true, created, skipped, totalOrders: orders.length });
   } catch (error) {
-    console.error('[adminBackfillTransactions] error:', error);
     return res.status(500).json({ ok: false, msg: 'Backfill failed', error: error.message });
   }
 };

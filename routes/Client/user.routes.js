@@ -112,7 +112,6 @@ UserRouter.get(
   (req, res, next) => {
     try {
       // Log the original URL for debugging
-      if (isDebug) console.log('Google OAuth callback hit with URL:', req.originalUrl);
       
       // Always redirect to production frontend after Google auth
       const productionFrontend = 'https://zixx.in';
@@ -132,14 +131,11 @@ UserRouter.get(
             req.session.returnTo = `${productionFrontend}/auth?next=${encodeURIComponent(returnTo)}`;
           }
         } catch (e) {
-          if (isDebug) console.warn('Invalid returnTo URL:', req.query.returnTo, e);
         }
       }
       
-      if (isDebug) console.log('Set returnTo:', req.session.returnTo);
       next();
     } catch (error) {
-      console.error('Error in Google OAuth callback setup:', error);
       // Redirect to a safe URL on error based on environment
       const fallbackUrl = getFrontendBase();
       res.redirect(fallbackUrl);
@@ -153,14 +149,11 @@ UserRouter.get(
       scope: ['profile', 'email']
     }, (err, user, info) => {
       if (err) {
-        console.error('Google OAuth error:', err);
         return next(err);
       }
       if (!user) {
-        if (isDebug) console.log('Google OAuth failed - no user returned');
         return res.redirect(`/api/clients/auth/google/failed?error=no_user`);
       }
-      if (isDebug) console.log('Google OAuth success - user returned:', user);
       // Attach user to request for the next middleware
       req.user = user;
       next();
@@ -175,7 +168,6 @@ UserRouter.get(
       const avatar = (profile.photos && profile.photos[0] && profile.photos[0].value) || '';
       
       if (!email) {
-        console.error('No email provided by Google OAuth');
         const FRONTEND = getFrontendBase();
         return res.redirect(`${FRONTEND}/auth?error=no_email`);
       }
@@ -220,9 +212,7 @@ UserRouter.get(
         
         try {
           await user.save();
-          if (isDebug) console.log('Created new user from Google OAuth:', user.email);
         } catch (error) {
-          console.error('Error saving new user from Google OAuth:', error);
           throw new Error('Failed to create user account');
         }
       }
@@ -278,7 +268,6 @@ UserRouter.get(
             returnTo = req.session.returnTo;
           }
         } catch (e) {
-          if (isDebug) console.warn('Invalid returnTo URL in session:', req.session.returnTo);
         }
       }
       
@@ -304,7 +293,6 @@ UserRouter.get(
       }
       
       // Log the redirect (without the token for security)
-      if (isDebug) console.log('Redirecting to:', `${url.origin}${url.pathname}?token=[REDACTED]&${url.searchParams.toString().replace(/token=[^&]*&?/, '')}`);
       
       // Redirect with security headers
       return res
@@ -319,7 +307,6 @@ UserRouter.get(
         })
         .redirect(url.toString());
     } catch (e) {
-      console.error('[google-callback] error:', e);
       const FRONTEND = getFrontendBase();
       return res.redirect(`${FRONTEND}/auth?error=google_oauth_failed`);
     }

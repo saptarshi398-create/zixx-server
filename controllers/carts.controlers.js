@@ -29,7 +29,6 @@ exports.getCartItemById = async (req, res) => {
 // Add to Cart
 exports.addToCart = async (req, res) => {
   let payload = req.body;
-  console.log("Payload:", payload);
   const productId = req.body.productId;
   const userId = req.userid;
 

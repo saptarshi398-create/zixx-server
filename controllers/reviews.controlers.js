@@ -9,7 +9,6 @@ exports.getAllReviews = async (req, res) => {
     const reviews = await ReviewModel.find();
     res.json({ data: reviews });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ msg: "Server error" });
   }
 };
@@ -22,7 +21,6 @@ exports.getAllReviewsForProduct = async (req, res) => {
       .populate("userId", "first_name last_name profile_pic");
     res.json({ data: reviews });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ msg: "Server error" });
   }
 }
@@ -41,7 +39,6 @@ exports.addReview = async (req, res) => {
     await ProductModel.findByIdAndUpdate(productId, { rating: avg, reviewCount: all.length });
     res.json({ msg: "Review added successfully" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ msg: "Server error" });
   }
 }
@@ -64,7 +61,6 @@ exports.updateReview = async (req, res) => {
     await ProductModel.findByIdAndUpdate(review.productId, { rating: avg, reviewCount: all.length });
     res.json({ msg: "Review updated successfully" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ msg: "Server error" });
   }
 }
@@ -85,7 +81,6 @@ exports.deleteReview =  async (req, res) => {
     await ProductModel.findByIdAndUpdate(review.productId, { rating: avg, reviewCount: all.length });
     res.json({ msg: "Review deleted successfully" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ msg: "Server error" });
   }
 }
