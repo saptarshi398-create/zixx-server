@@ -552,6 +552,60 @@ exports.logoutUser = (req, res) => {
 };
 
 
+// =====================
+// Change Password
+// =====================
+exports.changePassword = async (req, res) => {
+  try {
+    const userId = req.userid;
+    if (!userId) {
+      return res.status(401).json({ msg: 'Unauthorized: missing user id', ok: false });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    // Validate input
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ msg: 'Current password and new password are required', ok: false });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ msg: 'New password must be at least 6 characters long', ok: false });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ msg: 'New password must be different from current password', ok: false });
+    }
+
+    // Find user
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ msg: 'User not found', ok: false });
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      return res.status(401).json({ msg: 'Current password is incorrect', ok: false });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password
+    await UserModel.findByIdAndUpdate(userId, {
+      password: hashedNewPassword,
+      updatedAt: new Date()
+    });
+
+    res.json({ msg: 'Password updated successfully', ok: true });
+  } catch (error) {
+    console.error('[changePassword] error:', error);
+    res.status(500).json({ msg: 'Server error', error: error.message, ok: false });
+  }
+};
+
 // GET logout that redirects back to frontend - useful for top-level navigation to clear httpOnly cookies
 exports.logoutRedirect = (req, res) => {
   try {

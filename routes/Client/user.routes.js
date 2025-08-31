@@ -13,7 +13,8 @@ const {
   refreshAccessToken,
   logoutUser,
   logoutRedirect,
-  updateUser
+  updateUser,
+  changePassword
 } = require("../../controllers/user.controler");
 const { sendEmailOtp, verifyEmailOtp, sendPhoneOtp, verifyPhoneOtp } = require("../../controllers/otp.controller");
 const { authenticator } = require("../../middlewares/authenticator.middleware");
@@ -60,6 +61,8 @@ UserRouter.patch("/user/me", authenticator,
   cloudinaryUploadMiddleware,
   updateUser
 );
+
+UserRouter.patch("/user/change-password", authenticator, changePassword);
 
 UserRouter.get("/validatetoken", authenticator, validateToken);
 // Allow refresh without access-token authenticator; it validates refresh token itself
