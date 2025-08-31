@@ -198,6 +198,19 @@ async function verifyOtp(requestId, code, channel, email = null) {
   rec.used = true;
   await rec.save();
   
+  // Generate JWT token for registration verification
+  const verifyToken = jwt.sign(
+    {
+      kind: 'otp-verify',
+      channel: channel,
+      target: rec.target,
+      requestId: rec.requestId,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + (30 * 60) // 30 minutes
+    },
+    process.env.JWT_SECRET
+  );
+  
   // Find the user by email to include in the response
   const user = await UserModel.findOne({ email: rec.target }).select('-password -refreshToken').lean();
   
@@ -206,6 +219,7 @@ async function verifyOtp(requestId, code, channel, email = null) {
     data: { 
       requestId: rec.requestId,
       email: rec.target,
+      token: verifyToken,
       user: user ? { ...user, emailVerified: true } : null
     } 
   };
