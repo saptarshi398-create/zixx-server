@@ -290,12 +290,90 @@ exports.buyCartProducts = async (req, res) => {
     const paymentDetails = req.body.paymentDetails || {};
 
 
+    // Idempotency: allow client to provide a batchId so retries don't create duplicate orders
+    const batchId = req.body.batchId || (paymentDetails && paymentDetails.razorpay_order_id) || null;
+
+    // If an order already exists for this user with the same batchId or payment transaction id, return it
+    if (batchId) {
+      const existing = await OrderModel.findOne({ userId: req.userid, $or: [{ batchId }, { 'paymentDetails.transactionId': batchId }] });
+      if (existing) {
+        return res.json({ msg: 'Order already exists', ok: true, orderId: existing._id });
+      }
+    }
+
+    // If multiple cart items are being purchased together, create separate orders per item
+    if (Array.isArray(cartItems) && cartItems.length > 1) {
+      const createdOrderIds = [];
+      const baseBatch = batchId || null;
+      for (const item of cartItems) {
+        const singleOrderItems = [{
+          productId: item.productId,
+          productName: item.title,
+          description: item.description,
+          image: Array.isArray(item.image) ? item.image[0] : item.image,
+          quantity: item.Qty,
+          price: item.afterQtyprice || item.price,
+          totalPrice: item.total || (item.Qty * (item.afterQtyprice || item.price || 0))
+        }];
+
+        const singleTotal = singleOrderItems[0].totalPrice || 0;
+        const itemBatchId = baseBatch ? `${baseBatch}-${String(item._id)}` : null;
+
+        // idempotency per-item
+        if (itemBatchId) {
+          const existing = await OrderModel.findOne({ userId: req.userid, $or: [{ batchId: itemBatchId }, { 'paymentDetails.transactionId': itemBatchId }] });
+          if (existing) {
+            createdOrderIds.push(existing._id);
+            continue;
+          }
+        }
+
+        const singleOrder = new OrderModel({
+          userId: req.userid,
+          products: [item.productId],
+          orderItems: singleOrderItems,
+          totalAmount: singleTotal,
+          shippingAddress,
+          batchId: itemBatchId,
+          paymentStatus: paymentDetails.provider === 'razorpay' ? 'paid' : (paymentDetails.provider === 'cod' ? 'pending' : 'unpaid'),
+          paymentDetails: {
+            provider: paymentDetails.provider || null,
+            transactionId: paymentDetails.razorpay_payment_id || null,
+            razorpay_order_id: paymentDetails.razorpay_order_id || null,
+            paymentDate: paymentDetails.provider === 'razorpay' ? new Date() : null,
+            paymentAmount: paymentDetails.provider === 'razorpay' ? singleTotal : (paymentDetails.provider === 'cod' ? singleTotal : 0),
+            paymentStatus: paymentDetails.provider === 'razorpay' ? 'completed' : (paymentDetails.provider === 'cod' ? 'pending' : 'pending')
+          }
+        });
+
+        await singleOrder.save();
+        try {
+          await Transaction.create({ userId: req.userid, orderId: singleOrder._id, cost: String(singleTotal), products: [item.productId] });
+        } catch (e) {}
+        if (singleOrder.paymentStatus === 'paid') {
+          try { const u = await UserModel.findById(req.userid); await sendOrderReceipt(u?.email, singleOrder); } catch (e) {}
+        }
+        createdOrderIds.push(singleOrder._id);
+      }
+
+      // Remove bought cart items
+      if (req.body.singleCartId) {
+        await CartModel.deleteOne({ _id: req.body.singleCartId, userid: req.userid });
+      } else {
+        await CartModel.deleteMany({ userid: req.userid });
+      }
+
+      return res.json({ msg: 'Orders placed successfully', ok: true, orderIds: createdOrderIds });
+    }
+
+    // Single item purchase - create one order as before
     const order = new OrderModel({
       userId: req.userid,
       products: cartItems.map((item) => item.productId),
       orderItems,
       totalAmount,
       shippingAddress,
+      batchId,
       paymentStatus: paymentDetails.provider === 'razorpay' ? 'paid' : (paymentDetails.provider === 'cod' ? 'pending' : 'unpaid'),
       paymentDetails: {
         provider: paymentDetails.provider || null,
@@ -308,7 +386,6 @@ exports.buyCartProducts = async (req, res) => {
     });
 
     await order.save();
-    // Record admin-facing transaction
     try {
       await Transaction.create({
         userId: req.userid,
@@ -316,24 +393,17 @@ exports.buyCartProducts = async (req, res) => {
         cost: String(totalAmount),
         products: cartItems.map((item) => item.productId),
       });
-    } catch (e) {
-    }
-    // Send receipt email if paid
+    } catch (e) {}
     if (order.paymentStatus === 'paid') {
-      try {
-        const user = await UserModel.findById(req.userid);
-        await sendOrderReceipt(user?.email, order);
-      } catch (e) {
-      }
+      try { const user = await UserModel.findById(req.userid); await sendOrderReceipt(user?.email, order); } catch (e) {}
     }
-    // Remove only the bought cart item if single, else all
     if (req.body.singleCartId) {
       await CartModel.deleteOne({ _id: req.body.singleCartId, userid: req.userid });
     } else {
       await CartModel.deleteMany({ userid: req.userid });
     }
 
-    res.json({ msg: "Order placed successfully", ok: true });
+    return res.json({ msg: 'Order placed successfully', ok: true, orderId: order._id });
   } catch (err) {
     res.status(500).json({ msg: "Error placing order", ok: false, error: err.message });
   }
@@ -403,12 +473,22 @@ exports.buySelectedCartProducts = async (req, res) => {
       }
     }
 
+    // Idempotency: allow client to provide a batchId so retries don't create duplicate orders
+    const batchId = req.body.batchId || (paymentDetails && paymentDetails.razorpay_order_id) || null;
+    if (batchId) {
+      const existing = await OrderModel.findOne({ userId: req.userid, $or: [{ batchId }, { 'paymentDetails.transactionId': batchId }] });
+      if (existing) {
+        return res.json({ ok: true, msg: 'Order already exists', orderId: existing._id });
+      }
+    }
+
     const order = new OrderModel({
       userId: req.userid,
       products: cartItems.map((item) => item.productId),
       orderItems,
       totalAmount,
       shippingAddress: typeof shippingAddress === 'string' ? shippingAddress : (shippingAddress ? JSON.stringify(shippingAddress) : 'Default Shipping Address'),
+      batchId,
       paymentStatus: paymentDetails?.provider === 'razorpay' ? 'paid' : (paymentDetails?.provider === 'cod' ? 'pending' : 'unpaid'),
       paymentMethod: paymentDetails?.provider === 'razorpay' ? 'razorpay' : (paymentDetails?.provider === 'cod' ? 'cod' : 'credit_card'),
       paymentDetails: {

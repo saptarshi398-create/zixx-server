@@ -41,6 +41,8 @@ const orderSchema = new mongoose.Schema({
   estimatedDelivery: { type: Date, default: null },
   returnPolicy: { type: String, default: "30 days return policy" },
   orderSource: { type: String, enum: ["web", "mobile", "in_store"], default: "web" },
+  // Optional client-provided batch id to make order creation idempotent for bulk checkout
+  batchId: { type: String, default: null },
   customerFeedback: { type: String, default: null },
   orderItems: [
     {
