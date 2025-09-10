@@ -482,47 +482,79 @@ exports.buySelectedCartProducts = async (req, res) => {
       }
     }
 
-    const order = new OrderModel({
-      userId: req.userid,
-      products: cartItems.map((item) => item.productId),
-      orderItems,
-      totalAmount,
-      shippingAddress: typeof shippingAddress === 'string' ? shippingAddress : (shippingAddress ? JSON.stringify(shippingAddress) : 'Default Shipping Address'),
-      batchId,
-      paymentStatus: paymentDetails?.provider === 'razorpay' ? 'paid' : (paymentDetails?.provider === 'cod' ? 'pending' : 'unpaid'),
-      paymentMethod: paymentDetails?.provider === 'razorpay' ? 'razorpay' : (paymentDetails?.provider === 'cod' ? 'cod' : 'credit_card'),
-      paymentDetails: {
-        provider: paymentDetails?.provider || null,
-        transactionId: paymentDetails?.razorpay_payment_id || null,
-        razorpay_order_id: paymentDetails?.razorpay_order_id || null,
-        paymentDate: paymentDetails?.provider === 'razorpay' ? new Date() : null,
-        paymentAmount: totalAmount,
-        paymentStatus: paymentDetails?.provider === 'razorpay' ? 'completed' : (paymentDetails?.provider === 'cod' ? 'pending' : 'pending')
-      }
-    });
+    // Create separate orders for each cart item
+    const createdOrderIds = [];
+    const baseBatch = batchId || null;
 
-    await order.save();
-    // Record admin-facing transaction
-    try {
-      await Transaction.create({
-        userId: req.userid,
-        orderId: order._id,
-        cost: String(totalAmount),
-        products: cartItems.map((item) => item.productId),
-      });
-    } catch (e) {
-    }
-    // Send receipt email if paid
-    if (order.paymentStatus === 'paid') {
-      try {
-        const user = await UserModel.findById(req.userid);
-        await sendOrderReceipt(user?.email, order);
-      } catch (e) {
+    for (const item of cartItems) {
+      const singleOrderItems = [{
+        productId: item.productId,
+        productName: item.title,
+        description: item.description,
+        image: Array.isArray(item.image) ? item.image[0] : item.image,
+        quantity: item.Qty,
+        price: item.afterQtyprice || item.price,
+        totalPrice: item.total || (item.Qty * (item.afterQtyprice || item.price || 0))
+      }];
+
+      const singleTotal = singleOrderItems[0].totalPrice || 0;
+      const itemBatchId = baseBatch ? `${baseBatch}-${String(item._id)}` : null;
+
+      // idempotency per-item
+      if (itemBatchId) {
+        const existing = await OrderModel.findOne({ userId: req.userid, $or: [{ batchId: itemBatchId }, { 'paymentDetails.transactionId': itemBatchId }] });
+        if (existing) {
+          createdOrderIds.push(existing._id);
+          continue;
+        }
       }
+
+      const singleOrder = new OrderModel({
+        userId: req.userid,
+        products: [item.productId],
+        orderItems: singleOrderItems,
+        totalAmount: singleTotal,
+        shippingAddress: typeof shippingAddress === 'string' ? shippingAddress : (shippingAddress ? JSON.stringify(shippingAddress) : 'Default Shipping Address'),
+        batchId: itemBatchId,
+        paymentStatus: paymentDetails?.provider === 'razorpay' ? 'paid' : (paymentDetails?.provider === 'cod' ? 'pending' : 'unpaid'),
+        paymentMethod: paymentDetails?.provider === 'razorpay' ? 'razorpay' : (paymentDetails?.provider === 'cod' ? 'cod' : 'credit_card'),
+        paymentDetails: {
+          provider: paymentDetails?.provider || null,
+          transactionId: paymentDetails?.razorpay_payment_id || null,
+          razorpay_order_id: paymentDetails?.razorpay_order_id || null,
+          paymentDate: paymentDetails?.provider === 'razorpay' ? new Date() : null,
+          paymentAmount: singleTotal,
+          paymentStatus: paymentDetails?.provider === 'razorpay' ? 'completed' : (paymentDetails?.provider === 'cod' ? 'pending' : 'pending')
+        }
+      });
+
+      await singleOrder.save();
+      
+      // Record admin-facing transaction
+      try {
+        await Transaction.create({
+          userId: req.userid,
+          orderId: singleOrder._id,
+          cost: String(singleTotal),
+          products: [item.productId]
+        });
+      } catch (e) {}
+
+      // Send receipt email if paid
+      if (singleOrder.paymentStatus === 'paid') {
+        try {
+          const user = await UserModel.findById(req.userid);
+          await sendOrderReceipt(user?.email, singleOrder);
+        } catch (e) {}
+      }
+
+      createdOrderIds.push(singleOrder._id);
     }
+
+    // Remove bought cart items
     await CartModel.deleteMany({ _id: { $in: cartIds }, userid: req.userid });
 
-    return res.json({ ok: true, msg: 'Order placed successfully', orderId: order._id });
+    return res.json({ ok: true, msg: 'Orders placed successfully', orderIds: createdOrderIds });
   } catch (err) {
     return res.status(500).json({ ok: false, msg: 'Error placing consolidated order', error: err.message });
   }
