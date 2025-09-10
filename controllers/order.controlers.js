@@ -343,11 +343,31 @@ exports.buyCartProducts = async (req, res) => {
 exports.buySelectedCartProducts = async (req, res) => {
   try {
     const { cartIds, shippingAddress, paymentDetails } = req.body || {};
+
+    // Log incoming request for easier debugging when a 500 occurs
+    try {
+      console.log('[buySelectedCartProducts] incoming', { userId: req.userid, cartIds, shippingAddress, paymentDetails });
+    } catch (_) {}
+
     if (!Array.isArray(cartIds) || cartIds.length === 0) {
       return res.status(400).json({ ok: false, msg: 'cartIds array is required' });
     }
 
-    const cartItems = await CartModel.find({ _id: { $in: cartIds }, userid: req.userid });
+    // Basic validation: ensure all cartIds are non-empty strings (avoid Mongoose CastError)
+    const invalidId = cartIds.find(id => typeof id !== 'string' && typeof id !== 'number');
+    if (invalidId !== undefined) {
+      return res.status(400).json({ ok: false, msg: 'cartIds must be an array of id strings' });
+    }
+
+    let cartItems;
+    try {
+      cartItems = await CartModel.find({ _id: { $in: cartIds }, userid: req.userid });
+    } catch (err) {
+      // Handle Mongoose cast errors or other DB-level issues
+      console.error('[buySelectedCartProducts] CartModel.find error:', err && err.stack ? err.stack : err);
+      return res.status(400).json({ ok: false, msg: 'Invalid cartIds or database query failed', error: err && err.message });
+    }
+
     if (!cartItems.length) {
       return res.status(400).json({ ok: false, msg: 'No cart items found for given IDs' });
     }
@@ -364,12 +384,31 @@ exports.buySelectedCartProducts = async (req, res) => {
 
     const totalAmount = cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
 
+    // Validate paymentDetails shape minimally
+    if (paymentDetails && typeof paymentDetails !== 'object') {
+      return res.status(400).json({ ok: false, msg: 'paymentDetails must be an object when provided' });
+    }
+
+    // Validate shippingAddress type
+    if (shippingAddress && typeof shippingAddress !== 'string') {
+      try {
+        // allow objects that can be stringified to a readable address
+        if (typeof shippingAddress === 'object') {
+          // keep it, the schema expects string so we'll stringify later if needed
+        } else {
+          return res.status(400).json({ ok: false, msg: 'shippingAddress must be a string or address object' });
+        }
+      } catch (_) {
+        return res.status(400).json({ ok: false, msg: 'Invalid shippingAddress' });
+      }
+    }
+
     const order = new OrderModel({
       userId: req.userid,
       products: cartItems.map((item) => item.productId),
       orderItems,
       totalAmount,
-      shippingAddress: shippingAddress || 'Default Shipping Address',
+      shippingAddress: typeof shippingAddress === 'string' ? shippingAddress : (shippingAddress ? JSON.stringify(shippingAddress) : 'Default Shipping Address'),
       paymentStatus: paymentDetails?.provider === 'razorpay' ? 'paid' : (paymentDetails?.provider === 'cod' ? 'pending' : 'unpaid'),
       paymentMethod: paymentDetails?.provider === 'razorpay' ? 'razorpay' : (paymentDetails?.provider === 'cod' ? 'cod' : 'credit_card'),
       paymentDetails: {
