@@ -186,7 +186,37 @@ exports.trackOrderPublic = async (req, res) => {
       cancelledAt: order.cancelledAt || order.deletedAt || null,
       returnedAt: order.returnedAt || null,
       totalAmount: order.totalAmount || 0,
-      shippingAddress: order.shippingAddress || null,
+      shippingAddress: order.shippingAddress || 'Address not provided',
+      formattedAddress: (() => {
+        let addr = order.shippingAddress;
+        if (typeof addr === 'string') {
+          try {
+            // Try to parse if it's a stringified JSON
+            const parsed = JSON.parse(addr);
+            if (typeof parsed === 'object') {
+              addr = parsed;
+            }
+          } catch (e) {
+            // If not JSON, return as is
+            return addr;
+          }
+        }
+        if (typeof addr === 'object') {
+          return [
+            addr.name,
+            addr.street || addr.address,
+            addr.apartment && `Apt/Suite: ${addr.apartment}`,
+            addr.landmark && `Landmark: ${addr.landmark}`,
+            addr.city,
+            addr.state,
+            addr.pinCode || addr.zip || addr.postalCode,
+            addr.phone && `Phone: ${addr.phone}`
+          ]
+            .filter(Boolean)
+            .join('\n');
+        }
+        return addr || 'Address not provided';
+      })(),
       paymentStatus: order.paymentStatus || 'unknown',
       orderItems: (order.orderItems || []).map(it => ({
         productId: it.productId,
@@ -509,12 +539,35 @@ exports.buySelectedCartProducts = async (req, res) => {
         }
       }
 
+      // Format shipping address
+      let formattedAddress = 'Default Shipping Address';
+      if (shippingAddress) {
+        if (typeof shippingAddress === 'string') {
+          formattedAddress = shippingAddress;
+        } else if (typeof shippingAddress === 'object') {
+          // Format address object into readable string
+          const addr = shippingAddress;
+          formattedAddress = [
+            addr.name,
+            addr.street || addr.address,
+            addr.apartment,
+            addr.landmark,
+            addr.city,
+            addr.state,
+            addr.pinCode || addr.zip || addr.postalCode,
+            addr.phone
+          ]
+            .filter(Boolean) // Remove empty/undefined values
+            .join(', ');
+        }
+      }
+
       const singleOrder = new OrderModel({
         userId: req.userid,
         products: [item.productId],
         orderItems: singleOrderItems,
         totalAmount: singleTotal,
-        shippingAddress: typeof shippingAddress === 'string' ? shippingAddress : (shippingAddress ? JSON.stringify(shippingAddress) : 'Default Shipping Address'),
+        shippingAddress: formattedAddress,
         batchId: itemBatchId,
         paymentStatus: paymentDetails?.provider === 'razorpay' ? 'paid' : (paymentDetails?.provider === 'cod' ? 'pending' : 'unpaid'),
         paymentMethod: paymentDetails?.provider === 'razorpay' ? 'razorpay' : (paymentDetails?.provider === 'cod' ? 'cod' : 'credit_card'),
@@ -618,7 +671,46 @@ exports.getAllOrders = async (req, res) => {
           .find({ isDeleted: { $ne: true } })
           .populate("userId")
           .sort({ createdAt: -1 });
-        res.json({ orders, ok: true });
+
+        // Format addresses for admin panel
+        const formattedOrders = orders.map(order => {
+          const orderObj = order.toObject();
+          let addr = orderObj.shippingAddress;
+          
+          try {
+            // If address is stored as string but contains JSON
+            if (typeof addr === 'string') {
+              const parsed = JSON.parse(addr);
+              if (typeof parsed === 'object') {
+                addr = parsed;
+              }
+            }
+          } catch (e) {
+            // If not JSON string, keep as is
+          }
+
+          // Format address object into readable format
+          if (typeof addr === 'object') {
+            orderObj.formattedAddress = [
+              addr.name,
+              addr.street || addr.address,
+              addr.apartment && `Apt/Suite: ${addr.apartment}`,
+              addr.landmark && `Landmark: ${addr.landmark}`,
+              addr.city,
+              addr.state,
+              addr.pinCode || addr.zip || addr.postalCode,
+              addr.phone && `Phone: ${addr.phone}`
+            ]
+              .filter(Boolean)
+              .join('\n');
+          } else {
+            orderObj.formattedAddress = addr || 'Address not provided';
+          }
+          
+          return orderObj;
+        });
+
+        res.json({ orders: formattedOrders, ok: true });
     } catch (err) {
         res.status(500).json({ msg: "Failed to fetch orders", ok: false, error: err.message });
     }
