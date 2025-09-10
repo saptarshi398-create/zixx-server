@@ -839,8 +839,6 @@ exports.getAllOrders = async (req, res) => {
           } catch (e) {
             // If not JSON string, keep as is
           }
-
-          // Format address object into readable format
           if (typeof addr === 'object') {
             orderObj.formattedAddress = [
               addr.name,
