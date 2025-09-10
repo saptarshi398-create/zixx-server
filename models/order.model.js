@@ -8,7 +8,7 @@ const orderSchema = new mongoose.Schema({
   status: { type: String, enum: ["pending", "completed", "cancelled"], default: "pending" },
   totalAmount: { type: Number, required: true },
   shippingAddress: { type: String, required: true },
-  paymentMethod: { type: String, enum: ["credit_card", "paypal", "bank_transfer"], default: "credit_card" },
+  paymentMethod: { type: String, enum: ["credit_card", "paypal", "bank_transfer", "cod", "razorpay"], default: "credit_card" },
   paymentStatus: { type: String, enum: ["paid", "unpaid", "refunded"], default: "unpaid" },
   deliveryDate: { type: Date, default: null }, 
   trackingNumber: { type: String, default: null },

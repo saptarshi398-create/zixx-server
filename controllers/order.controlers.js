@@ -371,12 +371,13 @@ exports.buySelectedCartProducts = async (req, res) => {
       totalAmount,
       shippingAddress: shippingAddress || 'Default Shipping Address',
       paymentStatus: paymentDetails?.provider === 'razorpay' ? 'paid' : (paymentDetails?.provider === 'cod' ? 'pending' : 'unpaid'),
+      paymentMethod: paymentDetails?.provider === 'razorpay' ? 'razorpay' : (paymentDetails?.provider === 'cod' ? 'cod' : 'credit_card'),
       paymentDetails: {
         provider: paymentDetails?.provider || null,
         transactionId: paymentDetails?.razorpay_payment_id || null,
         razorpay_order_id: paymentDetails?.razorpay_order_id || null,
         paymentDate: paymentDetails?.provider === 'razorpay' ? new Date() : null,
-        paymentAmount: paymentDetails?.provider === 'razorpay' ? totalAmount : (paymentDetails?.provider === 'cod' ? totalAmount : 0),
+        paymentAmount: totalAmount,
         paymentStatus: paymentDetails?.provider === 'razorpay' ? 'completed' : (paymentDetails?.provider === 'cod' ? 'pending' : 'pending')
       }
     });

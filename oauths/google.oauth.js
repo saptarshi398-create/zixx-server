@@ -5,9 +5,9 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const getCallbackURL = () => {
   let baseUrl;
   if (process.env.NODE_ENV === 'production') {
-    baseUrl = process.env.SERVER_URL || 'https://zixx-server.onrender.com/api';
+    baseUrl = process.env.SERVER_URL ;
   } else {
-    baseUrl = process.env.SERVER_DEV_URL || 'http://localhost:8282/api';
+    baseUrl = process.env.SERVER_DEV_URL;
   }
   // Ensure no double slashes in the URL
   const cleanBase = baseUrl.replace(/\/+$/, '');
