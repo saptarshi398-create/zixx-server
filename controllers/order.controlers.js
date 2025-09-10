@@ -50,6 +50,7 @@ exports.adminMarkPacked = async (req, res) => {
     order.packedAt = new Date();
     order.status = 'packed';
     order.deliveryStatus = 'packing_complete';
+    order.trackingStatus = 'Packed';
     if (adminNotes) order.adminNotes = adminNotes;
     order.updatedAt = new Date();
     
@@ -313,6 +314,7 @@ exports.adminDeliverOrder = async (req, res) => {
     // Update order status
     order.deliveryStatus = 'delivered';
     order.status = 'completed';
+    order.trackingStatus = 'Delivered';
     order.deliveryDate = new Date();
     order.deliveredAt = new Date();
     if (adminNotes) order.adminNotes = adminNotes;
@@ -893,6 +895,8 @@ exports.verifyOrder = async (req, res) => {
     order.verifiedAt = new Date();
     order.verifiedBy = req.userid;
     order.status = 'verified';
+    order.trackingStatus = 'Order Confirmed';
+    order.deliveryStatus = 'confirmed';
     if (adminNotes) order.adminNotes = adminNotes;
     order.updatedAt = new Date();
 
@@ -957,6 +961,7 @@ exports.confirmOrderForDelivery = async (req, res) => {
     // Update order status and shipping details
     order.deliveryStatus = 'shipped';
     order.status = 'in_transit';
+    order.trackingStatus = 'Shipped';
     order.trackingNumber = trackingNumber;
     order.carrier = courierName;
     order.shippedAt = new Date();
