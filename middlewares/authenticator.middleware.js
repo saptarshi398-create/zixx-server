@@ -2,24 +2,21 @@ const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 const getTokenFromReq = (req) => {
-  // Only use Authorization header for admin routes
+  // Check Authorization header first
+  let token;
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.error('No Bearer token in Authorization header');
-    return null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
   }
   
-  const token = authHeader.split(' ')[1];
-  if (!token) {
-    console.error('Empty token in Authorization header');
-    return null;
+  // Then check cookies
+  if (!token && req.cookies && req.cookies.token) {
+    token = req.cookies.token;
   }
-
-  try {
-    const decoded = jwt.decode(token);
-    console.log('Token payload:', decoded);
-  } catch (e) {
-    console.error('Failed to decode token:', e.message);
+  
+  // Finally, check request body (for certain endpoints)
+  if (!token && req.body && req.body.token) {
+    token = req.body.token;
   }
   
   return token;

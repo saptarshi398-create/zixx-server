@@ -28,22 +28,54 @@ exports.adminMarkPacked = async (req, res) => {
     const order = await OrderModel.findById(id);
     if (!order) return res.status(404).json({ ok: false, msg: 'Order not found' });
     if (order.isDeleted) return res.status(400).json({ ok: false, msg: 'Order is deleted' });
+    
+    // Validate status transitions
     if (!order.isVerified) {
       return res.status(400).json({ ok: false, msg: 'Order must be verified before packing' });
+    }
+    if (order.status === 'cancelled') {
+      return res.status(400).json({ ok: false, msg: 'Cannot pack cancelled order' });
+    }
+    if (order.status === 'completed') {
+      return res.status(400).json({ ok: false, msg: 'Cannot pack completed order' });
+    }
+    if (order.deliveryStatus === 'shipped' || order.deliveryStatus === 'delivered') {
+      return res.status(400).json({ ok: false, msg: 'Cannot pack shipped/delivered order' });
     }
     if (order.packedAt) {
       return res.json({ ok: true, msg: 'Order already packed', order });
     }
+
+    // Update order status
     order.packedAt = new Date();
+    order.status = 'packed';
+    order.deliveryStatus = 'packing_complete';
+    order.trackingStatus = 'Packed';
     if (adminNotes) order.adminNotes = adminNotes;
     order.updatedAt = new Date();
+    
     // Audit trail
     try {
       order.auditTrail = Array.isArray(order.auditTrail) ? order.auditTrail : [];
-      order.auditTrail.push({ action: 'packed', by: req.userid || req.user?._id || null, at: new Date(), meta: { adminNotes: adminNotes || null } });
+      order.auditTrail.push({ 
+        action: 'packed', 
+        by: req.userid || req.user?._id || null, 
+        at: new Date(), 
+        meta: { 
+          adminNotes: adminNotes || null,
+          status: 'packed',
+          deliveryStatus: 'packing_complete'
+        } 
+      });
     } catch (_) {}
+
     await order.save();
-    return res.json({ ok: true, msg: 'Order marked as packed', order });
+    return res.json({ 
+      ok: true, 
+      msg: 'Order packed successfully. Ready for shipping.', 
+      order,
+      nextAction: 'ship'  // Hint for frontend about next possible action
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, msg: 'Failed to mark packed', error: err.message });
   }
@@ -257,21 +289,71 @@ exports.adminDeliverOrder = async (req, res) => {
       return res.status(403).json({ ok: false, msg: 'Access denied' });
     }
     const { id } = req.params;
-    const { adminNotes } = req.body || {};
+    const { adminNotes, deliveryProof } = req.body || {};
     const order = await OrderModel.findById(id);
     if (!order) return res.status(404).json({ ok: false, msg: 'Order not found' });
     if (order.isDeleted) return res.status(400).json({ ok: false, msg: 'Order is deleted' });
-    if (order.deliveryStatus === 'delivered' || order.status === 'completed') {
-      return res.json({ ok: true, msg: 'Order already delivered', order });
+
+    // Validate status transitions
+    if (!order.isVerified) {
+      return res.status(400).json({ ok: false, msg: 'Order must be verified before marking as delivered' });
     }
-    // Allow delivering from shipped or verified
+    if (!order.packedAt) {
+      return res.status(400).json({ ok: false, msg: 'Order must be packed before marking as delivered' });
+    }
+    if (order.status === 'cancelled') {
+      return res.status(400).json({ ok: false, msg: 'Cannot deliver cancelled order' });
+    }
+    if (order.deliveryStatus === 'delivered' || order.status === 'completed') {
+      return res.json({ ok: true, msg: 'Order is already delivered', order });
+    }
+    if (order.deliveryStatus !== 'shipped') {
+      return res.status(400).json({ ok: false, msg: 'Order must be shipped before marking as delivered' });
+    }
+
+    // Update order status
     order.deliveryStatus = 'delivered';
     order.status = 'completed';
+    order.trackingStatus = 'Delivered';
     order.deliveryDate = new Date();
+    order.deliveredAt = new Date();
     if (adminNotes) order.adminNotes = adminNotes;
+    if (deliveryProof) order.deliveryProof = deliveryProof;
     order.updatedAt = new Date();
+
+    // Add to audit trail
+    try {
+      order.auditTrail = Array.isArray(order.auditTrail) ? order.auditTrail : [];
+      order.auditTrail.push({
+        action: 'delivered',
+        by: req.userid || req.user?._id || null,
+        at: new Date(),
+        meta: {
+          deliveryProof,
+          adminNotes: adminNotes || null,
+          status: 'completed',
+          deliveryStatus: 'delivered'
+        }
+      });
+    } catch (_) {}
+
     await order.save();
-    return res.json({ ok: true, msg: 'Order marked as delivered', order });
+
+    // Try to send delivery confirmation to customer
+    try {
+      const user = await UserModel.findById(order.userId);
+      if (user?.email) {
+        // You can implement sendDeliveryConfirmation in mailer.js
+        // await sendDeliveryConfirmation(user.email, order);
+      }
+    } catch (e) {}
+
+    return res.json({
+      ok: true,
+      msg: 'Order marked as delivered successfully',
+      order,
+      nextAction: 'complete' // Indicates this is the final state
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, msg: 'Failed to mark delivered', error: err.message });
   }
@@ -613,48 +695,119 @@ exports.buySelectedCartProducts = async (req, res) => {
   }
 }
 
-// Cancel order
+// Cancel order (both admin and user)
 exports.cancelOrder = async (req, res) => {
   try {
-    const userId = req.userid;
     const orderId = req.params.id;
-    const order = await OrderModel.findOne({ _id: orderId, userId });
+    const { cancelReason, adminNotes, refundAmount } = req.body || {};
+    
+    // Find order - admin can cancel any order, user can only cancel their own
+    const orderQuery = req.user?.role === 'admin' 
+      ? { _id: orderId }
+      : { _id: orderId, userId: req.userid };
+    
+    const order = await OrderModel.findOne(orderQuery);
     if (!order) {
       return res.status(404).json({ ok: false, msg: "Order not found." });
     }
+
+    // Validate cancellation
     if (order.status === 'cancelled') {
       return res.status(400).json({ ok: false, msg: "Order already cancelled." });
     }
-    if (order.status === 'completed') {
-      return res.status(400).json({ ok: false, msg: "Completed order cannot be cancelled." });
+    if (order.status === 'completed' || order.deliveryStatus === 'delivered') {
+      return res.status(400).json({ ok: false, msg: "Completed/Delivered order cannot be cancelled." });
+    }
+    if (!req.user?.role === 'admin' && order.deliveryStatus === 'shipped') {
+      return res.status(400).json({ ok: false, msg: "Cannot cancel order after shipping. Please contact support." });
+    }
+    if (!cancelReason) {
+      return res.status(400).json({ ok: false, msg: "Cancellation reason is required." });
     }
 
-    // If order is paid via Razorpay, initiate refund first (supports optional partial amount in INR)
-    if (order.paymentStatus === 'paid' && order.paymentDetails && order.paymentDetails.transactionId) {
+    // Handle refund for paid orders
+    let refundId = null;
+    if (order.paymentStatus === 'paid' && order.paymentDetails?.transactionId) {
       try {
         const key_id = process.env.RAZORPAY_KEY_ID;
         const key_secret = process.env.RAZORPAY_SECRET;
         if (!key_id || !key_secret) {
-          return res.status(500).json({ ok: false, msg: 'Razorpay credentials not configured' });
+          return res.status(500).json({ ok: false, msg: 'Payment gateway credentials not configured' });
         }
+
         const auth = Buffer.from(`${key_id}:${key_secret}`).toString('base64');
-        const amountInPaise = req.body && typeof req.body.amount === 'number' && req.body.amount > 0 ? Math.round(req.body.amount * 100) : undefined;
+        // Calculate refund amount - allow partial refunds for admin
+        let amountInPaise;
+        if (req.user?.role === 'admin' && refundAmount) {
+          amountInPaise = Math.round(refundAmount * 100);
+        } else {
+          amountInPaise = Math.round(order.totalAmount * 100);
+        }
+
         const rpRes = await axios.post(
           `https://api.razorpay.com/v1/payments/${order.paymentDetails.transactionId}/refund`,
-          amountInPaise ? { amount: amountInPaise } : {},
+          { amount: amountInPaise },
           { headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' } }
         );
-        order.adminNotes = `Refund initiated: ${rpRes.data?.id || 'unknown'}`;
+        refundId = rpRes.data?.id;
       } catch (e) {
-        return res.status(500).json({ ok: false, msg: 'Failed to initiate refund. Please try again or contact support.' });
+        return res.status(500).json({ 
+          ok: false, 
+          msg: 'Failed to process refund. Please try again or contact support.',
+          error: e.message 
+        });
       }
     }
 
+    // Update order status
+    const previousStatus = order.status;
+    const previousDeliveryStatus = order.deliveryStatus;
+
     order.status = 'cancelled';
-    order.isDeleted = true;
-    order.deletedAt = new Date();
+    order.deliveryStatus = 'cancelled';
+    order.cancelledAt = new Date();
+    order.cancelledBy = req.user?.role === 'admin' ? 'admin' : 'user';
+    order.cancelReason = cancelReason;
+    if (adminNotes) order.adminNotes = adminNotes;
+    order.updatedAt = new Date();
+
+    // Add to audit trail
+    try {
+      order.auditTrail = Array.isArray(order.auditTrail) ? order.auditTrail : [];
+      order.auditTrail.push({
+        action: 'cancelled',
+        by: req.userid || req.user?._id || null,
+        at: new Date(),
+        meta: {
+          previousStatus,
+          previousDeliveryStatus,
+          cancelReason,
+          adminNotes: adminNotes || null,
+          refundId,
+          refundAmount: refundAmount || order.totalAmount,
+          cancelledBy: req.user?.role === 'admin' ? 'admin' : 'user'
+        }
+      });
+    } catch (_) {}
+
     await order.save();
-    res.json({ ok: true, msg: "Order cancelled successfully." });
+
+    // Notify customer about cancellation
+    try {
+      const user = await UserModel.findById(order.userId);
+      if (user?.email) {
+        // You can implement sendCancellationEmail in mailer.js
+        // await sendCancellationEmail(user.email, order);
+      }
+    } catch (e) {}
+
+    res.json({ 
+      ok: true, 
+      msg: "Order cancelled successfully.", 
+      refundInitiated: !!refundId,
+      refundId,
+      order 
+    });
   } catch (err) {
     res.status(500).json({ ok: false, msg: "Failed to cancel order.", error: err.message });
   }
@@ -688,8 +841,6 @@ exports.getAllOrders = async (req, res) => {
           } catch (e) {
             // If not JSON string, keep as is
           }
-
-          // Format address object into readable format
           if (typeof addr === 'object') {
             orderObj.formattedAddress = [
               addr.name,
@@ -719,60 +870,34 @@ exports.getAllOrders = async (req, res) => {
 // Admin: verify an order
 exports.verifyOrder = async (req, res) => {
   try {
-    // Debug request info
-    console.log('verifyOrder debug:', {
-      user: req.user,
-      headers: req.headers,
-      token: req.headers.authorization,
-      cookies: req.cookies
-    });
-
-    // Check if user exists and has admin role
-    if (!req.user) {
-      console.error('User object missing in request');
-      return res.status(401).json({ ok: false, msg: 'Authentication required' });
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ ok: false, msg: 'Access denied' });
     }
-    
-    if (req.user.role !== 'admin') {
-      console.error(`User role ${req.user.role} is not admin`);
-      return res.status(403).json({ ok: false, msg: 'Access denied. Admin role required.' });
-    }
-
     const { id } = req.params;
-    if (!id) {
-      return res.status(400).json({ ok: false, msg: 'Order ID is required' });
-    }
-
     const { adminNotes } = req.body || {};
+    const order = await OrderModel.findById(id);
+    if (!order) return res.status(404).json({ ok: false, msg: 'Order not found' });
+    if (order.isDeleted) return res.status(400).json({ ok: false, msg: 'Order is deleted' });
     
-    let order;
-    try {
-      order = await OrderModel.findById(id);
-    } catch (error) {
-      console.error('Error finding order:', error);
-      return res.status(400).json({ ok: false, msg: 'Invalid order ID format' });
+    // Check valid status transitions
+    if (order.status === 'cancelled') {
+      return res.status(400).json({ ok: false, msg: 'Cannot verify cancelled order' });
     }
-
-    if (!order) {
-      return res.status(404).json({ ok: false, msg: 'Order not found' });
+    if (order.status === 'completed') {
+      return res.status(400).json({ ok: false, msg: 'Cannot verify completed order' });
     }
-
-    if (order.isDeleted) {
-      return res.status(400).json({ ok: false, msg: 'Order is deleted' });
-    }
-
     if (order.isVerified) {
       return res.json({ ok: true, msg: 'Order already verified', order });
     }
 
-    // Update order fields
+    // Update order status
     order.isVerified = true;
     order.verifiedAt = new Date();
-    order.verifiedBy = req.user._id; // Using req.user._id instead of req.userid
-    order.status = 'verified'; // Add order status update
-    if (adminNotes) {
-      order.adminNotes = adminNotes;
-    }
+    order.verifiedBy = req.userid;
+    order.status = 'verified';
+    order.trackingStatus = 'Order Confirmed';
+    order.deliveryStatus = 'confirmed';
+    if (adminNotes) order.adminNotes = adminNotes;
     order.updatedAt = new Date();
 
     // Add to audit trail
@@ -780,23 +905,15 @@ exports.verifyOrder = async (req, res) => {
       order.auditTrail = Array.isArray(order.auditTrail) ? order.auditTrail : [];
       order.auditTrail.push({
         action: 'verified',
-        by: req.user._id,
+        by: req.userid || req.user?._id || null,
         at: new Date(),
         meta: { adminNotes: adminNotes || null }
       });
-    } catch (e) {
-      console.error('Error updating audit trail:', e);
-    }
+    } catch (_) {}
 
-    try {
-      await order.save();
-      return res.json({ ok: true, msg: 'Order verified successfully', order });
-    } catch (saveError) {
-      console.error('Error saving order:', saveError);
-      return res.status(500).json({ ok: false, msg: 'Failed to save verified order', error: saveError.message });
-    }
+    await order.save();
+    return res.json({ ok: true, msg: 'Order verified successfully', order });
   } catch (err) {
-    console.error('Verify order error:', err);
     return res.status(500).json({ ok: false, msg: 'Failed to verify order', error: err.message });
   }
 }
@@ -808,25 +925,171 @@ exports.confirmOrderForDelivery = async (req, res) => {
       return res.status(403).json({ ok: false, msg: 'Access denied' });
     }
     const { id } = req.params;
-    const { trackingNumber, deliveryDate, adminNotes } = req.body || {};
+    const { trackingNumber, deliveryDate, adminNotes, courierName } = req.body || {};
     const order = await OrderModel.findById(id);
     if (!order) return res.status(404).json({ ok: false, msg: 'Order not found' });
     if (order.isDeleted) return res.status(400).json({ ok: false, msg: 'Order is deleted' });
+    
+    // Validate status transitions
     if (!order.isVerified) {
-      return res.status(400).json({ ok: false, msg: 'Order must be verified before confirming delivery' });
+      return res.status(400).json({ ok: false, msg: 'Order must be verified before shipping' });
     }
-    if (order.deliveryStatus === 'shipped' || order.deliveryStatus === 'delivered') {
-      return res.json({ ok: true, msg: 'Order already confirmed for delivery', order });
+    if (!order.packedAt) {
+      return res.status(400).json({ ok: false, msg: 'Order must be packed before shipping' });
     }
+    if (order.status === 'cancelled') {
+      return res.status(400).json({ ok: false, msg: 'Cannot ship cancelled order' });
+    }
+    if (order.status === 'completed') {
+      return res.status(400).json({ ok: false, msg: 'Cannot ship completed order' });
+    }
+    if (order.deliveryStatus === 'delivered') {
+      return res.status(400).json({ ok: false, msg: 'Order is already delivered' });
+    }
+    if (order.deliveryStatus === 'shipped') {
+      return res.json({ ok: true, msg: 'Order is already shipped', order });
+    }
+
+    // Validate shipping details
+    if (!trackingNumber) {
+      return res.status(400).json({ ok: false, msg: 'Tracking number is required for shipping' });
+    }
+    if (!courierName) {
+      return res.status(400).json({ ok: false, msg: 'Courier name is required for shipping' });
+    }
+
+    // Update order status and shipping details
     order.deliveryStatus = 'shipped';
-    if (trackingNumber) order.trackingNumber = trackingNumber;
-    if (deliveryDate) order.deliveryDate = new Date(deliveryDate);
+    order.status = 'in_transit';
+    order.trackingStatus = 'Shipped';
+    order.trackingNumber = trackingNumber;
+    order.carrier = courierName;
+    order.shippedAt = new Date();
+    if (deliveryDate) order.expectedDeliveryDate = new Date(deliveryDate);
     if (adminNotes) order.adminNotes = adminNotes;
     order.updatedAt = new Date();
+
+    // Add to audit trail
+    try {
+      order.auditTrail = Array.isArray(order.auditTrail) ? order.auditTrail : [];
+      order.auditTrail.push({
+        action: 'shipped',
+        by: req.userid || req.user?._id || null,
+        at: new Date(),
+        meta: {
+          trackingNumber,
+          courierName,
+          expectedDeliveryDate: deliveryDate,
+          adminNotes: adminNotes || null
+        }
+      });
+    } catch (_) {}
+
     await order.save();
-    return res.json({ ok: true, msg: 'Order confirmed for delivery', order });
+
+    // Try to send shipping notification to customer
+    try {
+      const user = await UserModel.findById(order.userId);
+      if (user?.email) {
+        // You can implement sendShippingNotification in mailer.js
+        // await sendShippingNotification(user.email, order);
+      }
+    } catch (e) {}
+
+    return res.json({
+      ok: true,
+      msg: 'Order shipped successfully',
+      order,
+      nextAction: 'deliver' // Hint for frontend about next possible action
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, msg: 'Failed to confirm delivery', error: err.message });
+  }
+}
+
+// Admin: revert order to previous status
+exports.adminRevertOrderStatus = async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ ok: false, msg: 'Access denied' });
+    }
+
+    const { id } = req.params;
+    const { adminNotes, reason } = req.body || {};
+    
+    const order = await OrderModel.findById(id);
+    if (!order) return res.status(404).json({ ok: false, msg: 'Order not found' });
+    if (order.isDeleted) return res.status(400).json({ ok: false, msg: 'Cannot revert deleted order' });
+    
+    // Get current status
+    const currentStatus = order.status;
+    const currentDeliveryStatus = order.deliveryStatus;
+    
+    // Define status flow and get previous status
+    const statusFlow = ['pending', 'verified', 'packed', 'in_transit', 'completed'];
+    const deliveryFlow = ['pending', 'packing_complete', 'shipped', 'delivered'];
+    
+    const currentStatusIndex = statusFlow.indexOf(currentStatus);
+    const currentDeliveryIndex = deliveryFlow.indexOf(currentDeliveryStatus);
+    
+    if (currentStatusIndex <= 0) {
+      return res.status(400).json({ ok: false, msg: 'Cannot revert order in pending status' });
+    }
+
+    // Revert to previous status
+    const previousStatus = statusFlow[currentStatusIndex - 1];
+    const previousDeliveryStatus = currentDeliveryIndex > 0 ? deliveryFlow[currentDeliveryIndex - 1] : 'pending';
+
+    // Update order status
+    order.status = previousStatus;
+    order.deliveryStatus = previousDeliveryStatus;
+    
+    // Clear relevant timestamps based on reverted status
+    if (previousStatus === 'pending') order.verifiedAt = null;
+    if (previousStatus === 'verified') order.packedAt = null;
+    if (previousStatus === 'packed') {
+      order.shippedAt = null;
+      order.trackingNumber = null;
+      order.carrier = null;
+    }
+    if (previousStatus === 'in_transit') {
+      order.deliveredAt = null;
+      order.deliveryDate = null;
+    }
+
+    if (adminNotes) order.adminNotes = adminNotes;
+    order.updatedAt = new Date();
+
+    // Add to audit trail
+    try {
+      order.auditTrail = Array.isArray(order.auditTrail) ? order.auditTrail : [];
+      order.auditTrail.push({
+        action: 'status_reverted',
+        by: req.userid || req.user?._id || null,
+        at: new Date(),
+        meta: {
+          previousStatus: currentStatus,
+          newStatus: previousStatus,
+          previousDeliveryStatus: currentDeliveryStatus,
+          newDeliveryStatus: previousDeliveryStatus,
+          reason,
+          adminNotes: adminNotes || null
+        }
+      });
+    } catch (_) {}
+
+    await order.save();
+
+    return res.json({
+      ok: true,
+      msg: `Order reverted to ${previousStatus} status`,
+      order,
+      previousStatus: currentStatus,
+      newStatus: previousStatus
+    });
+
+  } catch (err) {
+    return res.status(500).json({ ok: false, msg: 'Failed to revert order status', error: err.message });
   }
 }
 
