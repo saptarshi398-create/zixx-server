@@ -92,7 +92,20 @@ UserRouter.get(
     } catch {}
     next();
   },
-  passport.authenticate('google', { scope: ['profile', 'email'] })
+  (req, res, next) => {
+    // Build callback URL dynamically from this request (respects proxies)
+    try {
+      const xfProto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString();
+      const proto = xfProto.split(',')[0].trim();
+      const host = (req.headers['x-forwarded-host'] || req.headers.host || '').toString();
+      const base = `${proto}://${host}`.replace(/\/+$/, '');
+      const callbackURL = `${base}/api/clients/auth/google/callback`;
+      if (isDebug) console.log('[oauth] using callbackURL', callbackURL);
+      return passport.authenticate('google', { scope: ['profile', 'email'], callbackURL })(req, res, next);
+    } catch (e) {
+      return passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+    }
+  }
 );
 
 UserRouter.get(
@@ -125,10 +138,21 @@ UserRouter.get(
     }
   },
   (req, res, next) => {
+    // Ensure callbackURL override matches the one used when initiating auth
+    let callbackURL;
+    try {
+      const xfProto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString();
+      const proto = xfProto.split(',')[0].trim();
+      const host = (req.headers['x-forwarded-host'] || req.headers.host || '').toString();
+      const base = `${proto}://${host}`.replace(/\/+$/, '');
+      callbackURL = `${base}/api/clients/auth/google/callback`;
+    } catch {}
+
     passport.authenticate('google', { 
       session: false,
       failureRedirect: '/api/clients/auth/google/failed',
-      scope: ['profile', 'email']
+      scope: ['profile', 'email'],
+      ...(callbackURL ? { callbackURL } : {})
     }, (err, user) => {
       if (err) return next(err);
       if (!user) return res.redirect(`/api/clients/auth/google/failed?error=no_user`);
