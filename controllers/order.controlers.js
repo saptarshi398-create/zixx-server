@@ -50,7 +50,7 @@ exports.adminMarkPacked = async (req, res) => {
     order.packedAt = new Date();
     order.status = 'packed';
     order.deliveryStatus = 'packing_complete';
-    order.trackingStatus = 'Packed';
+    order.trackingStatus = 'Packed and Ready';
     if (adminNotes) order.adminNotes = adminNotes;
     order.updatedAt = new Date();
     
@@ -870,23 +870,43 @@ exports.getAllOrders = async (req, res) => {
 // Admin: verify an order
 exports.verifyOrder = async (req, res) => {
   try {
-    if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({ ok: false, msg: 'Access denied' });
+    // Validate admin role and get user info
+    if (!req.user || !req.userid || req.user.role !== 'admin') {
+      console.error('Admin access denied', { user: req.user, userid: req.userid });
+      return res.status(403).json({ ok: false, msg: 'Access denied: Admin privileges required' });
     }
+
+    // Get and validate order ID
     const { id } = req.params;
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ ok: false, msg: 'Invalid order ID format' });
+    }
+
     const { adminNotes } = req.body || {};
     const order = await OrderModel.findById(id);
-    if (!order) return res.status(404).json({ ok: false, msg: 'Order not found' });
-    if (order.isDeleted) return res.status(400).json({ ok: false, msg: 'Order is deleted' });
+    
+    // Validate order exists
+    if (!order) {
+      console.error('Order not found', { orderId: id });
+      return res.status(404).json({ ok: false, msg: 'Order not found' });
+    }
+    
+    if (order.isDeleted) {
+      console.error('Cannot verify deleted order', { orderId: id });
+      return res.status(400).json({ ok: false, msg: 'Order is deleted' });
+    }
     
     // Check valid status transitions
     if (order.status === 'cancelled') {
       return res.status(400).json({ ok: false, msg: 'Cannot verify cancelled order' });
     }
+    
     if (order.status === 'completed') {
       return res.status(400).json({ ok: false, msg: 'Cannot verify completed order' });
     }
+    
     if (order.isVerified) {
+      console.log('Order already verified', { orderId: id });
       return res.json({ ok: true, msg: 'Order already verified', order });
     }
 
@@ -895,7 +915,7 @@ exports.verifyOrder = async (req, res) => {
     order.verifiedAt = new Date();
     order.verifiedBy = req.userid;
     order.status = 'verified';
-    order.trackingStatus = 'Order Confirmed';
+    order.trackingStatus = 'Verified';
     order.deliveryStatus = 'confirmed';
     if (adminNotes) order.adminNotes = adminNotes;
     order.updatedAt = new Date();
@@ -912,9 +932,28 @@ exports.verifyOrder = async (req, res) => {
     } catch (_) {}
 
     await order.save();
-    return res.json({ ok: true, msg: 'Order verified successfully', order });
+    console.log('Order verified successfully', { 
+      orderId: order._id,
+      verifiedBy: req.userid,
+      adminNotes: adminNotes || null 
+    });
+    return res.json({ 
+      ok: true, 
+      msg: 'Order verified successfully',
+      order,
+      nextAction: 'pack' // Hint for frontend about next possible action
+    });
   } catch (err) {
-    return res.status(500).json({ ok: false, msg: 'Failed to verify order', error: err.message });
+    console.error('Failed to verify order', { 
+      error: err.message,
+      orderId: req.params.id,
+      userId: req.userid
+    });
+    return res.status(500).json({ 
+      ok: false, 
+      msg: 'Failed to verify order. Please try again.',
+      error: err.message
+    });
   }
 }
 
@@ -961,7 +1000,7 @@ exports.confirmOrderForDelivery = async (req, res) => {
     // Update order status and shipping details
     order.deliveryStatus = 'shipped';
     order.status = 'in_transit';
-    order.trackingStatus = 'Shipped';
+    order.trackingStatus = 'Out for Delivery';
     order.trackingNumber = trackingNumber;
     order.carrier = courierName;
     order.shippedAt = new Date();
@@ -1043,10 +1082,17 @@ exports.adminRevertOrderStatus = async (req, res) => {
     // Update order status
     order.status = previousStatus;
     order.deliveryStatus = previousDeliveryStatus;
+    order.trackingStatus = previousStatus.charAt(0).toUpperCase() + previousStatus.slice(1);
     
     // Clear relevant timestamps based on reverted status
-    if (previousStatus === 'pending') order.verifiedAt = null;
-    if (previousStatus === 'verified') order.packedAt = null;
+    if (previousStatus === 'pending') {
+      order.verifiedAt = null;
+      order.trackingStatus = 'Pending';
+    }
+    if (previousStatus === 'verified') {
+      order.packedAt = null;
+      order.trackingStatus = 'Verified';
+    }
     if (previousStatus === 'packed') {
       order.shippedAt = null;
       order.trackingNumber = null;

@@ -26,7 +26,6 @@ const jwt = require("jsonwebtoken");
 const UserRouter = express.Router();
 const isDebug = process.env.DEBUG_LOGS === 'true';
 
-// Helper: resolve frontend base dynamically
 const getFrontendBase = () => {
   try {
     const base = (
@@ -102,7 +101,6 @@ UserRouter.get(
     try {
       const FRONTEND = getFrontendBase();
       req.session.returnTo = `${FRONTEND}/auth`;
-
       if (req.query.returnTo) {
         try {
           const returnTo = req.query.returnTo;
@@ -223,7 +221,6 @@ UserRouter.get(
         process.env.JWT_SECRET,
         { expiresIn: '7d', issuer: 'zixx-app', audience: 'web-client' }
       );
-
       const cookieOpts = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -232,7 +229,6 @@ UserRouter.get(
         maxAge: 7 * 24 * 60 * 60 * 1000,
         domain: process.env.NODE_ENV === 'production' ? '.zixx.in' : undefined
       };
-
       res.cookie('token', token, cookieOpts);
 
       let redirectBase = getFrontendBase();
@@ -245,7 +241,6 @@ UserRouter.get(
             'zixx.vercel.app',
             'zixx.in',
             'zixx-admin.vercel.app',
-            'localhost:3000',
             'localhost:8080',
             '127.0.0.1:8080'
           ];
@@ -255,7 +250,10 @@ UserRouter.get(
         } catch {}
       }
 
-      if (!returnTo) returnTo = `${redirectBase}/auth`;
+      if (!returnTo){
+        console.log("returnTo not found", req.session.returnTo);
+        returnTo = `${redirectBase}/auth`;
+      }
       if (req.session) delete req.session.returnTo;
 
       const url = new URL(returnTo);
@@ -266,7 +264,7 @@ UserRouter.get(
       if (req.query.next) {
         url.searchParams.set('next', req.query.next);
       }
-
+      console.log(url.toString());
       return res
         .status(302)
         .set({

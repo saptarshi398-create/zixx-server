@@ -12,8 +12,8 @@ exports.adminMiddleware = (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized: Invalid token" });
   }
 
-  if (decoded.role !== "admin") {
-    return res.status(403).json({ message: "Access denied" });
+  if (!decoded || decoded.role !== "admin") {
+    return res.status(403).json({ message: "Access denied: Admin role required" });
   }
 
   req.userid = decoded.userid;

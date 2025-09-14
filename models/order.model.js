@@ -5,7 +5,8 @@ const orderSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true },
 
   products: [{ type: mongoose.Schema.Types.ObjectId, ref: "product" }],
-  status: { type: String, enum: ["pending", "completed", "cancelled"], default: "pending" },
+  status: { type: String, enum: ["pending", "verified", "packed", "in_transit", "completed", "cancelled"], default: "pending" },
+  trackingStatus: { type: String, default: "Pending" }, // Human-readable status message
   totalAmount: { type: Number, required: true },
   shippingAddress: { type: String, required: true },
   paymentMethod: { type: String, enum: ["credit_card", "paypal", "bank_transfer", "cod", "razorpay"], default: "credit_card" },
@@ -17,8 +18,9 @@ const orderSchema = new mongoose.Schema({
   carrierUrl: { type: String, default: null },
   courierPhone: { type: String, default: null },
   courierLogoUrl: { type: String, default: null },
+  trackingStatus: { type: String, default: "Pending" },
   orderDate: { type: Date, default: Date.now },
-  deliveryStatus: { type: String, enum: ["pending", "shipped", "delivered", "returned"], default: "pending" },
+  deliveryStatus: { type: String, enum: ["pending", "confirmed", "packing_complete", "shipped", "delivered", "cancelled", "returned"], default: "pending" }, // Shipping status
   customerNotes: { type: String, default: null },
   adminNotes: { type: String, default: null },
   // Admin verification flow
@@ -65,9 +67,17 @@ const orderSchema = new mongoose.Schema({
   },
   orderHistory: [
     {
-      status: { type: String, enum: ["pending", "completed", "cancelled"], required: true },
+      status: { type: String, enum: ["pending", "verified", "packed", "in_transit", "completed", "cancelled"], required: true },
+      deliveryStatus: { type: String, enum: ["pending", "confirmed", "packing_complete", "shipped", "delivered", "cancelled", "returned"] },
       updatedAt: { type: Date, default: Date.now },
+      updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "user" },
       notes: { type: String, default: null },
+      meta: {
+        trackingNumber: String,
+        carrier: String,
+        adminNotes: String,
+        deliveryDate: Date
+      }
     }
   ],
   // Lightweight audit trail for admin actions
