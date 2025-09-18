@@ -20,7 +20,6 @@ const getFooter = async (req, res) => {
 const updateFooter = async (req, res) => {
   try {
     const updatedData = req.body;
-    console.log('[footer.controller] updateFooter called by', req.userid || req.user || null, 'body:', JSON.stringify(updatedData).slice(0, 1000));
     let footer = await Footer.findOne();
     
     // If no footer exists, create one with the provided data
