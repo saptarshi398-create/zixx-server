@@ -964,9 +964,9 @@ exports.confirmOrderForDelivery = async (req, res) => {
       return res.status(403).json({ ok: false, msg: 'Access denied' });
     }
     const { id } = req.params;
-    const { trackingNumber, deliveryDate, adminNotes, courierName, carrier } = req.body || {};
-    // Accept either courierName or carrier for backwards/forwards compatibility
-    const resolvedCourierName = (courierName || carrier || null);
+  const { trackingNumber, deliveryDate, adminNotes, courierName, carrier, carrierUrl, courierPhone, courierLogoUrl } = req.body || {};
+  // Accept either courierName or carrier for backwards/forwards compatibility
+  const resolvedCourierName = (courierName || carrier || null);
     const order = await OrderModel.findById(id);
     if (!order) return res.status(404).json({ ok: false, msg: 'Order not found' });
     if (order.isDeleted) return res.status(400).json({ ok: false, msg: 'Order is deleted' });
@@ -999,13 +999,41 @@ exports.confirmOrderForDelivery = async (req, res) => {
       return res.status(400).json({ ok: false, msg: 'Courier name (carrier) is required for shipping' });
     }
 
+    // Basic validation helpers (reuse logic similar to adminUpdateCourier)
+    const isHttpUrl = (u) => typeof u === 'string' && /^https?:\/\//i.test(u);
+    const normStr = (v) => (typeof v === 'string' ? v.trim() : undefined);
+    const validPhone = (p) => {
+      if (typeof p !== 'string') return false;
+      const digits = p.replace(/\D/g, '');
+      return digits.length >= 6 && digits.length <= 15;
+    };
+
     // Update order status and shipping details
-  order.deliveryStatus = 'shipped';
-  order.status = 'in_transit';
-  order.trackingStatus = 'Out for Delivery';
-  order.trackingNumber = trackingNumber;
-  // store the resolved carrier/courier name
-  order.carrier = resolvedCourierName;
+    order.deliveryStatus = 'shipped';
+    order.status = 'in_transit';
+    order.trackingStatus = 'Out for Delivery';
+    order.trackingNumber = trackingNumber;
+    // store the resolved carrier/courier name
+    order.carrier = resolvedCourierName;
+    // optional courier details
+    if (carrierUrl !== undefined) {
+      if (carrierUrl && !isHttpUrl(carrierUrl)) {
+        return res.status(400).json({ ok: false, msg: 'carrierUrl must start with http or https' });
+      }
+      order.carrierUrl = normStr(carrierUrl) || null;
+    }
+    if (courierLogoUrl !== undefined) {
+      if (courierLogoUrl && !isHttpUrl(courierLogoUrl)) {
+        return res.status(400).json({ ok: false, msg: 'courierLogoUrl must start with http or https' });
+      }
+      order.courierLogoUrl = normStr(courierLogoUrl) || null;
+    }
+    if (courierPhone !== undefined) {
+      if (courierPhone && !validPhone(courierPhone)) {
+        return res.status(400).json({ ok: false, msg: 'courierPhone must be 6-15 digits (you may include separators)' });
+      }
+      order.courierPhone = normStr(courierPhone) || null;
+    }
     order.shippedAt = new Date();
     if (deliveryDate) order.expectedDeliveryDate = new Date(deliveryDate);
     if (adminNotes) order.adminNotes = adminNotes;
