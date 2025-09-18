@@ -964,7 +964,9 @@ exports.confirmOrderForDelivery = async (req, res) => {
       return res.status(403).json({ ok: false, msg: 'Access denied' });
     }
     const { id } = req.params;
-    const { trackingNumber, deliveryDate, adminNotes, courierName } = req.body || {};
+    const { trackingNumber, deliveryDate, adminNotes, courierName, carrier } = req.body || {};
+    // Accept either courierName or carrier for backwards/forwards compatibility
+    const resolvedCourierName = (courierName || carrier || null);
     const order = await OrderModel.findById(id);
     if (!order) return res.status(404).json({ ok: false, msg: 'Order not found' });
     if (order.isDeleted) return res.status(400).json({ ok: false, msg: 'Order is deleted' });
@@ -993,16 +995,17 @@ exports.confirmOrderForDelivery = async (req, res) => {
     if (!trackingNumber) {
       return res.status(400).json({ ok: false, msg: 'Tracking number is required for shipping' });
     }
-    if (!courierName) {
-      return res.status(400).json({ ok: false, msg: 'Courier name is required for shipping' });
+    if (!resolvedCourierName) {
+      return res.status(400).json({ ok: false, msg: 'Courier name (carrier) is required for shipping' });
     }
 
     // Update order status and shipping details
-    order.deliveryStatus = 'shipped';
-    order.status = 'in_transit';
-    order.trackingStatus = 'Out for Delivery';
-    order.trackingNumber = trackingNumber;
-    order.carrier = courierName;
+  order.deliveryStatus = 'shipped';
+  order.status = 'in_transit';
+  order.trackingStatus = 'Out for Delivery';
+  order.trackingNumber = trackingNumber;
+  // store the resolved carrier/courier name
+  order.carrier = resolvedCourierName;
     order.shippedAt = new Date();
     if (deliveryDate) order.expectedDeliveryDate = new Date(deliveryDate);
     if (adminNotes) order.adminNotes = adminNotes;
@@ -1017,7 +1020,7 @@ exports.confirmOrderForDelivery = async (req, res) => {
         at: new Date(),
         meta: {
           trackingNumber,
-          courierName,
+          courierName: resolvedCourierName,
           expectedDeliveryDate: deliveryDate,
           adminNotes: adminNotes || null
         }
