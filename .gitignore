@@ -1,4 +1,4 @@
-Environment files
+# Environment files
 .env
 .env.*
 .env.local
@@ -6,5 +6,19 @@ Environment files
 .env.production
 .env.test
 
+# Dependencies
 node_modules/
-init/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Optional init data for development
+init/dummy-data/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
