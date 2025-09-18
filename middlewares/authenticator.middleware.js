@@ -18,6 +18,11 @@ const getTokenFromReq = (req) => {
   if (!token && req.body && req.body.token) {
     token = req.body.token;
   }
+
+  // Also accept token passed as query parameter (e.g., ?token=... from redirect)
+  if (!token && req.query && req.query.token) {
+    token = req.query.token;
+  }
   
   return token;
 };
