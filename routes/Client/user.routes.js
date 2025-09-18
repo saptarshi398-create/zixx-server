@@ -264,9 +264,14 @@ UserRouter.get(
           const allowedDomains = [
             'zixx.vercel.app',
             'zixx.in',
+            'admin.zixx.in',
             'zixx-admin.vercel.app',
             'localhost:8080',
-            '127.0.0.1:8080'
+            '127.0.0.1:8080',
+            'localhost:8000',
+            '127.0.0.1:8000',
+            'localhost:8282',
+            '127.0.0.1:8282'
           ];
           if (allowedDomains.some(domain => url.hostname.endsWith(domain))) {
             returnTo = req.session.returnTo;

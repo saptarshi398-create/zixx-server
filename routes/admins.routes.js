@@ -8,7 +8,8 @@ const {
     ProductAdminRouter,
     OrdersRouter,
     BannersAdminRouter,
-    TestimonialsAdminRouter
+    TestimonialsAdminRouter,
+    footerRouter
 } = require("./Admin");
 
 const AdminsRouters = express.Router();
@@ -21,6 +22,9 @@ AdminsRouters.use("/admin", GeographyRouter);
 AdminsRouters.use("/admin", ProductAdminRouter);
 AdminsRouters.use("/admin", OrdersRouter);
 AdminsRouters.use("/admin", BannersAdminRouter);
+// Mount footer early so public GET /api/admin/footer isn't intercepted by routers that
+// apply admin-only middleware at the '/admin' mount (some routers call router.use(adminMiddleware)).
+AdminsRouters.use("/admin/footer", footerRouter);
 AdminsRouters.use("/admin", TestimonialsAdminRouter);
 
 AdminsRouters.get("/", (req, res) => {
