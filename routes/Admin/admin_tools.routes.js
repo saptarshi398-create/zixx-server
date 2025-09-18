@@ -1,7 +1,7 @@
 const express = require('express');
 const { authenticator } = require('../../middlewares/authenticator.middleware');
 const { adminMiddleware } = require('../../middlewares/admin.middleware');
-const { emptyDatabase } = require('../../controllers/admin_tools.controller');
+const { emptyDatabase, dbStatus, initDummy } = require('../../controllers/admin_tools.controller');
 
 const AdminToolsRouter = express.Router();
 
