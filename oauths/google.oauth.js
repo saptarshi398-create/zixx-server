@@ -4,9 +4,9 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const getCallbackURL = () => {
   let baseUrl;
   if (process.env.NODE_ENV === 'production') {
-    baseUrl = process.env.SERVER_URL || 'https://stingray-app-p5rsq.ondigitalocean.app/api';
+    baseUrl = process.env.SERVER_URL;
   } else {
-    baseUrl = process.env.SERVER_DEV_URL || 'http://localhost:8282/api';
+    baseUrl = process.env.SERVER_DEV_URL;
   }
   const cleanBase = baseUrl.replace(/\/+$/, '');
   const callbackUrl = `${cleanBase}/clients/auth/google/callback`;

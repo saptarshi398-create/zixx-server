@@ -186,6 +186,9 @@ app.get("/", (req, res) => {
   res.send("WELCOME TO THE ZIXX APP BACKEND");
 });
 
+// Debug endpoint: check server time and cloudinary env presence
+// debug endpoints removed
+
 // Serve frontend in production (only if a build exists or explicitly enabled)
 if (process.env.NODE_ENV === "production") {
   const frontendPath = path.join(__dirname, "..", "frontend", "dist");

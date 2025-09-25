@@ -30,10 +30,10 @@ ProductAdminRouter.post(
   upload.single("image"),
   cloudinaryUploadMiddleware,
   (req, res) => {
-    if (!req.body.profile_pic) {
-      return res.status(400).json({ ok: false, message: "No image uploaded" });
-    }
-    return res.json({ ok: true, url: req.body.profile_pic });
+    const url = req.body.imageUrl || req.body.profile_pic;
+    const publicId = req.body.imagePublicId || req.body.public_id;
+    if (!url) return res.status(400).json({ ok: false, message: "No image uploaded" });
+    return res.json({ ok: true, url, publicId });
   }
 );
 

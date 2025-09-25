@@ -59,6 +59,12 @@ const footerSchema = new mongoose.Schema(
       label: { type: String },
       url: { type: String }
     }],
+    // Services shown in frontend footer (managed from admin panel)
+    services: [{
+      icon: { type: String }, // store icon name (e.g. "Truck", "Headset") and map to component in frontend
+      title: { type: String },
+      description: { type: String }
+    }],
     copyrightText: {
       type: String,
       default: "",

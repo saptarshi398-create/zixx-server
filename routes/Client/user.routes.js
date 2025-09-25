@@ -280,7 +280,7 @@ UserRouter.get(
       }
 
       if (!returnTo){
-        console.log("returnTo not found", req.session.returnTo);
+        if (isDebug) console.log("returnTo not found", req.session.returnTo);
         returnTo = `${redirectBase}/auth`;
       }
       if (req.session) delete req.session.returnTo;
@@ -293,7 +293,7 @@ UserRouter.get(
       if (req.query.next) {
         url.searchParams.set('next', req.query.next);
       }
-      console.log(url.toString());
+  if (isDebug) console.log(url.toString());
       return res
         .status(302)
         .set({

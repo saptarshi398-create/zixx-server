@@ -28,15 +28,53 @@ const getTokenFromReq = (req) => {
 };
 
 const authenticator = (req, res, next) => {
-  const token = getTokenFromReq(req);
-  if (!token) return res.status(401).json({ msg: "Unauthorized: No token" });
+  try {
+    const token = getTokenFromReq(req);
+    if (!token) {
+      console.error('[Auth] No token provided');
+      return res.status(401).json({ msg: "Unauthorized: No token", ok: false });
+    }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(401).json({ msg: "Unauthorized: Invalid token" });
-    req.userid = decoded.userid;
-    req.user = decoded;
-    next();
-  });
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+      if (err) {
+        console.error('[Auth] Token verification failed:', err.message);
+        // If token is expired, suggest refreshing
+        if (err.name === 'TokenExpiredError') {
+          return res.status(401).json({ 
+            msg: "Token expired", 
+            error: "token_expired",
+            ok: false,
+            hint: "Please refresh your token or login again"
+          });
+        }
+        return res.status(401).json({ 
+          msg: "Unauthorized: Invalid token", 
+          error: err.message,
+          ok: false 
+        });
+      }
+      
+      if (!decoded.userid) {
+        console.error('[Auth] Token missing userid');
+        return res.status(401).json({ 
+          msg: "Invalid token format", 
+          error: "missing_userid",
+          ok: false 
+        });
+      }
+      
+      req.userid = decoded.userid;
+      req.user = decoded;
+      next();
+    });
+  } catch (error) {
+    console.error('[Auth] Unexpected error:', error);
+    return res.status(500).json({ 
+      msg: "Authentication failed", 
+      error: error.message,
+      ok: false 
+    });
+  }
 };
 
 module.exports = { authenticator, getTokenFromReq };

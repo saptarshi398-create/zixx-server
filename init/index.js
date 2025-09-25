@@ -138,18 +138,18 @@ const initializeDatabase = async () => {
   try {
     
     // Connect to database
-    await connection;
-    console.log("Connected to MongoDB");
+  await connection;
+  if (process.env.DEBUG_LOGS === 'true') console.log("Connected to MongoDB");
     // Clear all existing data
     await clearAllData();
-    console.log("Cleared all existing data");
+  if (process.env.DEBUG_LOGS === 'true') console.log("Cleared all existing data");
     // Create default admin
     const adminId = await createDefaultAdmin();
-    console.log("Created default admin user");
+  if (process.env.DEBUG_LOGS === 'true') console.log("Created default admin user");
     // Import fresh data
     await importFreshData(adminId);
 
-    console.log("Imported fresh data");
+  if (process.env.DEBUG_LOGS === 'true') console.log("Imported fresh data");
     process.exit(0);
   } catch (error) {
     process.exit(1);
