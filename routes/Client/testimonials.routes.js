@@ -1,5 +1,5 @@
 const express = require('express');
-const { listTestimonials, createTestimonial } = require('../../controllers/testimonials.controller');
+const { listTestimonials, createTestimonial, userHasTestimonial } = require('../../controllers/testimonials.controller');
 const { authenticator } = require('../../middlewares/authenticator.middleware');
 
 const TestimonialsRouter = express.Router();
@@ -65,6 +65,9 @@ let rateLimit = null;
 // Public list
 TestimonialsRouter.get('/testimonials', listTestimonials);
 
+// Check if current authenticated user already has a testimonial
+TestimonialsRouter.get('/testimonials/me', requireAuth, userHasTestimonial);
+
 // Allow both authenticated and anonymous submission; if authenticated, authenticator will attach userid
 TestimonialsRouter.post('/testimonials', rateLimit, authenticatorOptional, createTestimonial);
 
@@ -79,6 +82,15 @@ function authenticatorOptional(req, res, next) {
     return authenticator(req, mockedRes, next);
   } catch (e) {
     return next();
+  }
+}
+
+// Require authentication or return 401
+function requireAuth(req, res, next) {
+  try {
+    return authenticator(req, res, next);
+  } catch (e) {
+    return res.status(401).json({ ok: false, msg: 'Unauthorized' });
   }
 }
 

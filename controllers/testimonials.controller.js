@@ -77,6 +77,22 @@ exports.createTestimonial = async (req, res) => {
 };
 
 // ==============================
+// Check if current user has submitted a testimonial
+// ==============================
+exports.userHasTestimonial = async (req, res) => {
+  try {
+    // Require authenticated user
+    if (!req.userid) return res.status(401).json({ ok: false, msg: 'Unauthorized' });
+    const count = await TestimonialModel.countDocuments({ user: req.userid });
+    return res.json({ ok: true, hasTestimonial: count > 0, total: count });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, msg: 'Failed to check testimonial', error: e.message });
+  }
+};
+
+// ==============================
 // Admin: list testimonials (search/sort/pagination)
 // ==============================
 exports.adminListTestimonials = async (req, res) => {
