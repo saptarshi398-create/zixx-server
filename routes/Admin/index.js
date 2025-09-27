@@ -10,6 +10,7 @@ const { BannersAdminRouter } = require("./banners.routes");
 const { TestimonialsAdminRouter } = require("./testimonials.routes");
 const footerRouter = require("./footer.routes");
 const { AuthAdminRouter } = require('./authpage.routes');
+
 const { AuthClientRouter } = require('./authpage.routes');
 
 module.exports = {
@@ -24,6 +25,6 @@ module.exports = {
   TestimonialsAdminRouter,
   footerRouter,
   AuthAdminRouter,
-  AuthClientRouter
-  ,AdminToolsRouter
+  AuthClientRouter,
+  AdminToolsRouter
 };
