@@ -391,7 +391,11 @@ exports.buyCartProducts = async (req, res) => {
       description: item.description,
       image: Array.isArray(item.image) ? item.image[0] : item.image,
       quantity: item.Qty,
-      price: item.afterQtyprice || item.price,
+      price: item.price, // Final calculated price per unit
+      basePrice: item.basePrice || item.price,
+      tax: item.tax,
+      shippingCost: item.shippingCost,
+      discount: item.discount,
       totalPrice: item.total
     }));
 
@@ -424,8 +428,12 @@ exports.buyCartProducts = async (req, res) => {
           description: item.description,
           image: Array.isArray(item.image) ? item.image[0] : item.image,
           quantity: item.Qty,
-          price: item.afterQtyprice || item.price,
-          totalPrice: item.total || (item.Qty * (item.afterQtyprice || item.price || 0))
+          price: item.price, // Final calculated price per unit
+      basePrice: item.basePrice || item.price,
+      tax: item.tax,
+      shippingCost: item.shippingCost,
+      discount: item.discount,
+          totalPrice: item.total || (item.price * item.Qty)
         }];
 
         const singleTotal = singleOrderItems[0].totalPrice || 0;
@@ -560,7 +568,11 @@ exports.buySelectedCartProducts = async (req, res) => {
       description: item.description,
       image: Array.isArray(item.image) ? item.image[0] : item.image,
       quantity: item.Qty,
-      price: item.afterQtyprice || item.price,
+      price: item.price, // Final calculated price per unit
+      basePrice: item.basePrice || item.price,
+      tax: item.tax,
+      shippingCost: item.shippingCost,
+      discount: item.discount,
       totalPrice: item.total
     }));
 
@@ -605,8 +617,12 @@ exports.buySelectedCartProducts = async (req, res) => {
         description: item.description,
         image: Array.isArray(item.image) ? item.image[0] : item.image,
         quantity: item.Qty,
-        price: item.afterQtyprice || item.price,
-        totalPrice: item.total || (item.Qty * (item.afterQtyprice || item.price || 0))
+        price: item.price, // Final calculated price per unit
+      basePrice: item.basePrice || item.price,
+      tax: item.tax,
+      shippingCost: item.shippingCost,
+      discount: item.discount,
+        totalPrice: item.total || (item.price * item.Qty)
       }];
 
       const singleTotal = singleOrderItems[0].totalPrice || 0;

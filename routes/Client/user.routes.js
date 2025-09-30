@@ -266,6 +266,7 @@ UserRouter.get(
             'zixx.in',
             'admin.zixx.in',
             'zixx-admin.vercel.app',
+            'https://server.zixx.in/api',
             'localhost:8080',
             '127.0.0.1:8080',
             'localhost:8000',

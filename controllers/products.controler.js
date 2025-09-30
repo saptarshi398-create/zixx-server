@@ -185,6 +185,35 @@ exports.getCategoriesByGender = async (req, res) => {
   }
 }
 
+// Helper function to calculate final price
+const calculateFinalPrice = (basePrice, tax, shippingCost, discount) => {
+  let finalPrice = Number(basePrice);
+  
+  // Add tax
+  if (tax && tax.type === 'percentage' && tax.value > 0) {
+    finalPrice += (finalPrice * tax.value) / 100;
+  }
+  
+  // Add shipping cost
+  if (shippingCost && shippingCost.type === 'fixed' && shippingCost.value > 0) {
+    finalPrice += Number(shippingCost.value);
+  }
+  
+  // Subtract discount
+  if (discount && discount.value > 0) {
+    if (discount.type === 'percentage') {
+      finalPrice -= (finalPrice * discount.value) / 100;
+    } else if (discount.type === 'fixed') {
+      finalPrice -= Number(discount.value);
+    }
+    // For coupon type, discount is applied at checkout, not here
+  }
+  
+  // Round up to nearest integer (upper bound)
+  // Example: 199.52 -> 200, 199.11 -> 200, 199.82 -> 200
+  return Math.ceil(Math.max(0, finalPrice));
+};
+
 // ✅ Add product
 exports.addProduct = async (req, res) => {
   try {
@@ -192,8 +221,8 @@ exports.addProduct = async (req, res) => {
     if (!user || user.role !== "admin") {
       return res.status(403).json({ ok: false, message: "Access denied" });
     }
-    if (!req.body.title || !req.body.description || !req.body.price) {
-      return res.status(400).send({ msg: "All fields are required" });
+    if (!req.body.title || !req.body.description || !req.body.basePrice) {
+      return res.status(400).send({ msg: "Title, description, and base price are required" });
     }
     if (!req.body.category || !req.body.subcategory || !req.body.gender) {
       return res.status(400).send({ msg: "Category, subcategory, and gender are required" });
@@ -251,15 +280,28 @@ exports.addProduct = async (req, res) => {
     }
     const legacyUrls = structured.map((i) => i.url);
 
+    // Parse pricing fields
+    const tax = req.body.tax || { type: 'free', value: 0 };
+    const shippingCost = req.body.shippingCost || { type: 'free', value: 0 };
+    const discount = req.body.discount || { type: 'percentage', value: 0 };
+    const basePrice = Number(req.body.basePrice);
+
+    // Calculate final price
+    const calculatedPrice = calculateFinalPrice(basePrice, tax, shippingCost, discount);
+
     const payload = {
       ...req.body,
       ...(featuresArr ? { features: featuresArr } : {}),
+      basePrice,
+      tax,
+      shippingCost,
+      discount,
+      price: calculatedPrice, // Store calculated final price
       image: legacyUrls, // legacy flat URLs
       images: structured, // structured with metadata
       userId: user.userid,
     };
     delete payload.imagesDetailed;
-    delete payload.images; // ensure we only persist normalized fields
 
     const newProduct = new ProductModel(payload);
     await newProduct.save();
@@ -374,8 +416,22 @@ exports.updateProduct = async (req, res) => {
       updateData.image = structuredU.map((i) => i.url);
       updateData.images = structuredU;
       delete updateData.imagesDetailed;
-      delete updateData.images; // we set normalized images above
     }
+    
+    // Recalculate price if pricing fields are updated
+    const currentProduct = await ProductModel.findById(req.params.id);
+    if (!currentProduct) {
+      return res.status(404).send({ ok: false, msg: "Product not found" });
+    }
+    
+    const basePrice = updateData.basePrice !== undefined ? Number(updateData.basePrice) : currentProduct.basePrice;
+    const tax = updateData.tax || currentProduct.tax;
+    const shippingCost = updateData.shippingCost || currentProduct.shippingCost;
+    const discount = updateData.discount || currentProduct.discount;
+    
+    // Calculate and update final price
+    updateData.price = calculateFinalPrice(basePrice, tax, shippingCost, discount);
+    
     const updated = await ProductModel.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!updated) {
       return res.status(404).send({ ok: false, msg: "Product not found" });

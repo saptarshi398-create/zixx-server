@@ -4,7 +4,8 @@ const { WishlistModel } = require("../models/wishlist.model");
 const getWishlist = async (req, res) => {
   try {
     const wishlist = await WishlistModel.findOne({ userId: req.userid }).populate("productIds");
-    res.json({ wishlist: wishlist?.productIds || [], ok: true });
+    // The populated products will automatically include basePrice, tax, shippingCost, discount objects
+    res.json({ data: wishlist?.productIds || [], ok: true });
   } catch (error) {
     console.error('Wishlist getWishlist error:', error);
     res.status(500).json({ msg: "Error", ok: false, error: error.message });

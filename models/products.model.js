@@ -7,8 +7,21 @@ const productSchema = mongoose.Schema({
   gender: { type: String, required: true },
   category: { type: String, required: true },
   subcategory: { type: String, required: true },
-  price: { type: Number, required: true },
-  discount: { type: Number, default: 0 },
+  // Pricing breakdown fields
+  basePrice: { type: Number, required: true }, // Original product price set by admin
+  tax: {
+    type: { type: String, enum: ['free', 'percentage'], default: 'free' },
+    value: { type: Number, default: 0 } // Percentage value if type is 'percentage'
+  },
+  shippingCost: {
+    type: { type: String, enum: ['free', 'fixed'], default: 'free' },
+    value: { type: Number, default: 0 } // Fixed amount in Rs if type is 'fixed'
+  },
+  discount: {
+    type: { type: String, enum: ['percentage', 'fixed', 'coupon'], default: 'percentage' },
+    value: { type: Number, default: 0 } // Percentage or fixed amount
+  },
+  price: { type: Number, required: true }, // Final calculated price
   rating: { type: Number, default: 0 },
   theme: { type: String, required: true },
   // New: list of key product features

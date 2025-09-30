@@ -59,6 +59,7 @@ if (process.env.NODE_ENV === 'production') {
     'https://zixx-admin.vercel.app',
     'https://admin.zixx.in',
     'https://zixx-admin-hzavv7qnl-ajay-mondals-projects.vercel.app',
+    'https://server.zixx.in',
     'https://zixx-admin-*.vercel.app', // Wildcard for preview deployments
   ]));
 }

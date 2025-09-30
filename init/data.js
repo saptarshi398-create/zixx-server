@@ -49,12 +49,16 @@ const data = [
           "S",
           "M",
           "XL",
-          "XXL"
+          "XXL",
+          "3XL",
+          "4XL"
       ],
       "color": [
           "red",
           "black",
-          "gray"
+          "gray",
+          "white",
+          "blue"
       ],
       "image": [
           "https://rukminim2.flixcart.com/image/612/612/xif0q/shirt/e/c/d/s-ht-007-hkv-fashion-original-imagvdakdpnqxhyp.jpeg?q=70"
@@ -83,7 +87,9 @@ const data = [
           "S",
           "M",
           "XL",
-          "XXL"
+          "XXL",
+          "3XL",
+          "4XL"
       ],
       "color": [
           "black",
@@ -116,7 +122,10 @@ const data = [
       "size": [
           "S",
           "M",
-          "XL"
+          "XL",
+          "XXL",
+          "3XL",
+          "4XL"
       ],
       "color": [
           "black",

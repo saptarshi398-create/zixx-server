@@ -53,8 +53,21 @@ const orderSchema = new mongoose.Schema({
       description: { type: String },
       image: { type: String },
       quantity: { type: Number, required: true },
-      price: { type: Number, required: true },
-      totalPrice: { type: Number, required: true },
+      price: { type: Number, required: true }, // Final calculated price per unit
+      basePrice: { type: Number }, // Original product price
+      tax: {
+        type: { type: String, enum: ['free', 'percentage'] },
+        value: { type: Number, default: 0 }
+      },
+      shippingCost: {
+        type: { type: String, enum: ['free', 'fixed'] },
+        value: { type: Number, default: 0 }
+      },
+      discount: {
+        type: { type: String, enum: ['percentage', 'fixed', 'coupon'] },
+        value: { type: Number, default: 0 }
+      },
+      totalPrice: { type: Number, required: true }, // price * quantity
     }
   ],
   paymentDetails: {
